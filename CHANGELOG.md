@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Exception grouping** — identical exceptions (same type + raise location) are collapsed
+  into a single row on the Exceptions view, with an occurrence count and first/last seen.
+  Grouping/counting is done in the database via a new indexed `fingerprint` column, so it
+  scales to large event volumes. Searching or drilling into a request still shows
+  individual occurrences. New migration backfills `fingerprint` for existing exceptions.
 - **Grouped, collapsible sidebar navigation** — entry types are organized into
   **Core / Infrastructure / Application** groups for progressive disclosure, instead of a
   flat 16-item list. The group containing the active type opens automatically.

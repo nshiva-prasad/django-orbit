@@ -19,6 +19,7 @@ from orbit.recorders import (
     clear_current_context,
 )
 from orbit.utils import (
+    compute_exception_fingerprint,
     extract_client_ip,
     extract_request_body,
     extract_request_headers,
@@ -273,9 +274,11 @@ class OrbitMiddleware:
         from orbit.models import OrbitEntry
 
         exception_info = get_exception_info(exception)
+        fingerprint = compute_exception_fingerprint(exception_info)
 
         payload = {
             **exception_info,
+            "fingerprint": fingerprint,
             "request_method": request_data.get("method"),
             "request_path": request_data.get("path"),
             "request_host": request_data.get("host"),
@@ -286,6 +289,7 @@ class OrbitMiddleware:
                 OrbitEntry.objects.create(
                     type=OrbitEntry.TYPE_EXCEPTION,
                     family_hash=family_hash,
+                    fingerprint=fingerprint,
                     payload=payload,
                 )
         except Exception:

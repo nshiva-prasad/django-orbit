@@ -300,8 +300,15 @@ class OrbitFeedPartial(OrbitProtectedView, View):
         if family_hash:
             queryset = queryset.filter(family_hash=family_hash)
 
-        # Filter by search query "q"
         query = request.GET.get("q")
+
+        # Exception grouping (B3): on the plain Exceptions view, collapse identical
+        # exceptions into one row with a count + first/last seen. Skipped when searching
+        # or drilling into a family so those flows still show individual occurrences.
+        if entry_type == OrbitEntry.TYPE_EXCEPTION and not family_hash and not query:
+            return self._exception_groups_response(request, per_page, page)
+
+        # Filter by search query "q"
         if query:
             import uuid
             try:
@@ -339,6 +346,48 @@ class OrbitFeedPartial(OrbitProtectedView, View):
             {
                 "entries": entries,
                 "current_type": entry_type,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": total_pages,
+                "total_count": total_count,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+            },
+        )
+
+    def _exception_groups_response(self, request, per_page, page):
+        """Render the grouped Exceptions feed (B3). Aggregation happens in the DB."""
+        groups_qs = OrbitEntry.objects.exception_groups()
+
+        total_count = groups_qs.count()  # number of distinct errors
+        total_pages = (total_count + per_page - 1) // per_page
+        page = max(1, min(page, total_pages)) if total_pages > 0 else 1
+        offset = (page - 1) * per_page
+
+        page_groups = list(groups_qs[offset : offset + per_page])
+        fingerprints = [g["fingerprint"] for g in page_groups]
+        latest = OrbitEntry.objects.latest_for_fingerprints(fingerprints)
+
+        groups = []
+        for g in page_groups:
+            rep = latest.get(g["fingerprint"])
+            if rep is None:
+                continue
+            groups.append(
+                {
+                    "entry": rep,
+                    "count": g["count"],
+                    "first_seen": g["first_seen"],
+                    "last_seen": g["last_seen"],
+                }
+            )
+
+        return TemplateResponse(
+            request,
+            "orbit/partials/feed_exception_groups.html",
+            {
+                "groups": groups,
+                "current_type": OrbitEntry.TYPE_EXCEPTION,
                 "page": page,
                 "per_page": per_page,
                 "total_pages": total_pages,

@@ -28,6 +28,51 @@ class OrbitEntryManager(models.Manager):
         """Get all exception entries."""
         return self.filter(type=OrbitEntry.TYPE_EXCEPTION)
 
+    def exception_groups(self):
+        """
+        Aggregate exceptions by fingerprint entirely in the database.
+
+        Returns one row per distinct error (``fingerprint``, ``count``, ``first_seen``,
+        ``last_seen``) ordered by recency. Scales to large volumes because the
+        grouping/counting is done by the DB via the (type, fingerprint, -created_at)
+        index — never by loading rows into Python. The representative (latest) occurrence
+        for each group is fetched separately and only for the current page (see
+        ``latest_for_fingerprints``).
+        """
+        from django.db.models import Count, Max, Min
+
+        return (
+            self.filter(type=OrbitEntry.TYPE_EXCEPTION)
+            .exclude(fingerprint="")
+            .values("fingerprint")
+            .annotate(
+                count=Count("id"),
+                last_seen=Max("created_at"),
+                first_seen=Min("created_at"),
+            )
+            .order_by("-last_seen")
+        )
+
+    def latest_for_fingerprints(self, fingerprints):
+        """
+        Return {fingerprint: latest OrbitEntry} for the given fingerprints.
+
+        Attaches a representative (most recent) occurrence to each group on the *current
+        page* only. Cost is bounded by page size: one indexed single-row lookup per
+        fingerprint (uses the (type, fingerprint, -created_at) index), and portable across
+        SQLite / MySQL / PostgreSQL (no DISTINCT ON / window-function dependency).
+        """
+        latest = {}
+        for fp in fingerprints:
+            entry = (
+                self.filter(type=OrbitEntry.TYPE_EXCEPTION, fingerprint=fp)
+                .order_by("-created_at")
+                .first()
+            )
+            if entry is not None:
+                latest[fp] = entry
+        return latest
+
     def jobs(self):
         """Get all job/task entries."""
         return self.filter(type=OrbitEntry.TYPE_JOB)
@@ -203,6 +248,16 @@ class OrbitEntry(models.Model):
         help_text="Hash to group related entries (e.g., all queries for one request)",
     )
 
+    # Grouping fingerprint (e.g. exception type + raise location) for deduplicating
+    # repeated events. Indexed so grouping/counting happens in the DB, not in Python.
+    fingerprint = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Stable hash used to group identical events (e.g. exceptions)",
+    )
+
     # Flexible payload storage
     payload = models.JSONField(
         default=dict, help_text="JSON payload containing event-specific data"
@@ -230,6 +285,8 @@ class OrbitEntry(models.Model):
         indexes = [
             models.Index(fields=["-created_at", "type"]),
             models.Index(fields=["family_hash", "created_at"]),
+            # Backs exception grouping: filter by type, group by fingerprint
+            models.Index(fields=["type", "fingerprint", "-created_at"]),
         ]
 
     def __str__(self):
