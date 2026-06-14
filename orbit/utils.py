@@ -351,6 +351,25 @@ def get_exception_info(exc: Exception) -> Dict[str, Any]:
     }
 
 
+def compute_exception_fingerprint(exception_info: Dict[str, Any]) -> str:
+    """
+    Compute a stable, cheap fingerprint to group identical exceptions.
+
+    Combines the exception type with the *raise location* (deepest frame's file and
+    function), deliberately ignoring line numbers and the message so the same logical
+    error groups together even as code shifts or the message varies. This runs on the
+    recording path, so it is intentionally a single fast hash.
+    """
+    import hashlib
+
+    exc_type = exception_info.get("exception_type", "") or ""
+    frames = exception_info.get("traceback") or []
+    top = frames[-1] if frames else {}
+    location = "{}:{}".format(top.get("filename", ""), top.get("name", ""))
+    raw = "{}|{}".format(exc_type, location)
+    return hashlib.md5(raw.encode("utf-8", "replace")).hexdigest()[:16]
+
+
 def truncate_string(s: str, max_length: int = 1000) -> str:
     """
     Truncate a string to a maximum length.
