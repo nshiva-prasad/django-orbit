@@ -13,6 +13,7 @@ from orbit.views import (
     OrbitExportView,
     OrbitFeedPartial,
     OrbitHealthView,
+    OrbitStatsSectionView,
     OrbitStatsView,
 )
 
@@ -30,5 +31,6 @@ urlpatterns = [
     path("export/<uuid:entry_id>/", OrbitExportView.as_view(), name="export"),
     # Stats & Health
     path("stats/", OrbitStatsView.as_view(), name="stats"),
+    path("stats/section/<str:section>/", OrbitStatsSectionView.as_view(), name="stats_section"),
     path("health/", OrbitHealthView.as_view(), name="health"),
 ]

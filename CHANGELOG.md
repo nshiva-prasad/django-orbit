@@ -7,11 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Grouped, collapsible sidebar navigation** — entry types are organized into
+  **Core / Infrastructure / Application** groups for progressive disclosure, instead of a
+  flat 16-item list. The group containing the active type opens automatically.
+- **Standalone "All Events"** item above the type groups (it is a meta-filter, not an
+  entry type).
+- **Compact KPI strip** on the dashboard (requests, queries, avg, errors, slow, N+1)
+  replacing the bulky four-card panel, leaving more room for the feed.
+- **Detail panel keyboard navigation** — `j`/`k` (and arrows) move to the next/previous
+  entry in the current feed, `Esc` closes, with on-panel prev/next buttons and a position
+  indicator.
+- **First-run onboarding tour** — a dismissable welcome overlay explaining the layout and
+  shortcuts, reopenable from the `?` button in the top bar.
+- **Lazy-loaded Stats sections** — trends, database, cache, jobs and security each load
+  via their own `/orbit/stats/section/<name>/` endpoint.
+- **`DESIGN.md`** — a project design system documenting tokens, components and principles.
+
+### Changed
+
+- **Visual overhaul** toward a calmer, Linear-inspired minimal UI: softened glow/gradient
+  decoration, consistent badges and cards, reduced-motion support.
+- **Stats page paints fast** — only the headline (Apdex, avg/P95, error rate, throughput,
+  percentiles) is computed up front; heavier sections load lazily. This removes the
+  SQLite "database is locked" retry workaround.
+- Sidebar and feed are now driven from a single nav config and the model's `TYPE_ICONS`/
+  `TYPE_COLORS` maps, eliminating duplicated per-type markup.
+
 ### Fixed
 
+- The "Entry Details" slide-over no longer flashes open on page load (added `x-cloak`),
+  most visible when opening the Stats page.
+- The dashboard and Health pages no longer display a hardcoded stale version; both now
+  read the installed package version.
+- The feed no longer jumps to the top on background polling — scroll position is preserved.
 - Hardened filesystem-related tests on Windows so the suite no longer depends on writable temp/cache directories with unstable permissions.
 - Fixed the Health dashboard guidance to use `RECORD_JOBS` instead of the nonexistent `RECORD_CELERY`.
 - Updated pytest collection settings to ignore local transient directories such as `.pytest_cache` and `orbit_test_storage`.
+
+### Removed
+
+- The "Export Filtered" button in the sidebar. Per-entry JSON export remains available
+  from the detail panel.
 
 ### Documentation
 
