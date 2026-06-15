@@ -12,6 +12,7 @@ from orbit.views import (
     OrbitDetailPartial,
     OrbitExportView,
     OrbitFeedPartial,
+    OrbitExplainView,
     OrbitHealthView,
     OrbitStatsSectionView,
     OrbitStatsView,
@@ -25,6 +26,7 @@ urlpatterns = [
     # HTMX partials
     path("feed/", OrbitFeedPartial.as_view(), name="feed"),
     path("detail/<uuid:entry_id>/", OrbitDetailPartial.as_view(), name="detail"),
+    path("explain/<uuid:entry_id>/", OrbitExplainView.as_view(), name="explain"),
     # Actions
     path("clear/", OrbitClearView.as_view(), name="clear"),
     path("export/", OrbitExportView.as_view(), name="export_all"),

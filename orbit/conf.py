@@ -30,6 +30,11 @@ DEFAULTS = {
     # B1: optional callable (or dotted path) receiving an OrbitEntry and returning a list
     # of tags to attach. Lets you tag entries (e.g. by tenant, feature, status) for search.
     "TAG_CALLBACK": None,
+    # B2: on-demand query EXPLAIN from the detail panel. EXPLAIN_ANALYZE actually executes
+    # the statement (only ever allowed for SELECT, in a rolled-back savepoint), so it is off
+    # by default.
+    "ENABLE_EXPLAIN": True,
+    "EXPLAIN_ANALYZE": False,
     "MAX_BODY_SIZE": 65536,  # 64KB
     "STORAGE_LIMIT": 1000,  # Max entries to keep
     # Original watchers

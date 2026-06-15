@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Query EXPLAIN** — run a query plan on demand from a query's detail panel
+  (`Explain plan`). Vendor-aware (PostgreSQL / MySQL / SQLite) with graceful fallback.
+  `EXPLAIN ANALYZE` (which executes the statement) is opt-in via `EXPLAIN_ANALYZE`, only
+  ever run for read-only `SELECT`s inside a rolled-back savepoint. Never runs during
+  recording. Configurable via `ENABLE_EXPLAIN`.
+- **Request waterfall** — a request's child queries are shown as a timeline of bars
+  positioned by each query's real start offset within the request (captured at execution),
+  sized by duration, colored for slow/duplicate. Click a bar to open that query.
 - **Tagging + tag search** — entries can carry tags (indexed, comma-wrapped). A
   `TAG_CALLBACK` setting attaches tags automatically (e.g. by tenant, feature, status).
   Filter by tag via `?tag=foo` or by typing `tag:foo` in the search box; tags show as

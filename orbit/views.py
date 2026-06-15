@@ -21,6 +21,7 @@ __all__ = [
     "OrbitClearView",
     "OrbitStatsView",
     "OrbitStatsSectionView",
+    "OrbitExplainView",
     "OrbitExportView",
     "OrbitHealthView",
 ]
@@ -523,6 +524,9 @@ class OrbitDetailPartial(OrbitProtectedView, View):
                     "most_duplicated_query_id": most_duplicated_query_id,
                 }
 
+        # Request waterfall (B4): position child query spans on the request timeline.
+        waterfall = self._build_waterfall(entry, related_entries)
+
         # Format payload as pretty JSON
         payload_json = json.dumps(
             entry.payload, indent=2, ensure_ascii=False, default=str
@@ -537,8 +541,49 @@ class OrbitDetailPartial(OrbitProtectedView, View):
                 "related_entries": related_entries,
                 "duplicate_entries": duplicate_entries,
                 "duplicate_query_stats": duplicate_query_stats,
+                "waterfall": waterfall,
             },
         )
+
+    @staticmethod
+    def _build_waterfall(entry, related_entries):
+        """
+        Build span bars (left%/width%) for a request's child queries.
+
+        Uses each query's recorded start_offset_ms (accurate, captured at execution) over
+        the request's total duration. Pure arithmetic on already-fetched rows — no extra
+        queries. Returns None when there's nothing meaningful to show.
+        """
+        if entry.type != OrbitEntry.TYPE_REQUEST or not entry.duration_ms:
+            return None
+
+        total = entry.duration_ms
+        spans = []
+        for rel in related_entries:
+            if rel.type != OrbitEntry.TYPE_QUERY:
+                continue
+            payload = rel.payload or {}
+            offset = payload.get("start_offset_ms")
+            dur = rel.duration_ms
+            if offset is None or dur is None:
+                continue
+            left = max(0.0, min(100.0, (offset / total) * 100))
+            width = max(0.6, min(100.0 - left, (dur / total) * 100))
+            spans.append(
+                {
+                    "id": rel.id,
+                    "left": round(left, 2),
+                    "width": round(width, 2),
+                    "duration_ms": dur,
+                    "is_slow": payload.get("is_slow", False),
+                    "is_duplicate": payload.get("is_duplicate", False),
+                    "sql": (payload.get("sql", "") or "")[:80],
+                }
+            )
+
+        if not spans:
+            return None
+        return {"total_ms": round(total, 1), "spans": spans, "count": len(spans)}
 
 
 class OrbitClearView(OrbitProtectedView, View):
@@ -647,6 +692,35 @@ class OrbitStatsSectionView(OrbitProtectedView, View):
             ctx["error"] = str(e)
 
         return TemplateResponse(request, template, ctx)
+
+
+class OrbitExplainView(OrbitProtectedView, View):
+    """Run EXPLAIN for a captured query entry, on demand (B2)."""
+
+    def get(self, request: HttpRequest, entry_id: str) -> HttpResponse:
+        from orbit.conf import get_config
+        from orbit.explain import explain_query
+
+        config = get_config()
+        ctx = {"entry_id": entry_id}
+
+        if not config.get("ENABLE_EXPLAIN", True):
+            ctx["error"] = "EXPLAIN is disabled (ENABLE_EXPLAIN=False)."
+            return TemplateResponse(request, "orbit/partials/explain.html", ctx)
+
+        entry = get_object_or_404(OrbitEntry, id=entry_id)
+        payload = entry.payload or {}
+        sql = payload.get("sql", "")
+        if entry.type != OrbitEntry.TYPE_QUERY or not sql:
+            ctx["error"] = "This entry has no SQL to explain."
+            return TemplateResponse(request, "orbit/partials/explain.html", ctx)
+
+        ctx["result"] = explain_query(
+            sql,
+            params=payload.get("params"),
+            analyze=config.get("EXPLAIN_ANALYZE", False),
+        )
+        return TemplateResponse(request, "orbit/partials/explain.html", ctx)
 
 
 class OrbitExportView(OrbitProtectedView, View):
