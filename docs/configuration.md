@@ -238,6 +238,18 @@ ORBIT_CONFIG = {
 }
 ```
 
+#### `ENABLE_EXPLAIN`
+- **Type**: `bool`
+- **Default**: `True`
+- **Description**: Allow running `EXPLAIN` for a query from its detail panel (on demand).
+
+#### `EXPLAIN_ANALYZE`
+- **Type**: `bool`
+- **Default**: `False`
+- **Description**: Use `EXPLAIN ANALYZE`, which **executes** the statement to gather real
+  timings. Only ever applied to read-only `SELECT`s and wrapped in a rolled-back savepoint.
+  Leave off unless you understand the implications.
+
 #### `MAX_BODY_SIZE`
 - **Type**: `int`
 - **Default**: `65536` (64KB)

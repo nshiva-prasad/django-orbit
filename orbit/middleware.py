@@ -78,8 +78,9 @@ class OrbitMiddleware:
         # Extract request data before processing
         request_data = self._extract_request_data(request, config)
 
-        # Create query wrapper
-        query_wrapper = OrbitQueryWrapper(family_hash=family_hash)
+        # Create query wrapper (pass request start so each query gets an accurate
+        # offset for the request waterfall — B4)
+        query_wrapper = OrbitQueryWrapper(family_hash=family_hash, request_start=start_time)
 
         # Process request with query recording
         response = None
