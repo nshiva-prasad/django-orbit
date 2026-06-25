@@ -69,7 +69,7 @@ The MCP server launches on-demand using stdio transport — no extra process to 
 
 ## Available Tools
 
-The MCP server exposes 7 tools to your AI assistant:
+The MCP server exposes raw telemetry tools plus higher-level agentic investigation tools to your AI assistant:
 
 | Tool | What it returns |
 |------|----------------|
@@ -80,6 +80,33 @@ The MCP server exposes 7 tools to your AI assistant:
 | `get_request_detail` | Every event for one request via `family_hash` |
 | `search_entries` | Keyword search across all event types |
 | `get_stats_summary` | Error rate, avg response time, cache hit rate |
+| `audit_mcp_exposure` | Effective MCP safety policy: payload inclusion, masking and limits |
+| `investigate_request` | Diagnosis for one `family_hash`: timeline, signals, queries, hypotheses and next actions |
+| `investigate_exception_group` | Blast-radius summary for one exception fingerprint |
+| `create_incident_bundle` | On-demand JSON handoff bundle from a request, fingerprint or ticket text |
+| `build_debug_brief` | Match natural-language ticket/error text to recent Orbit evidence |
+| `propose_fix_hypotheses` | Ranked fix directions from captured evidence; does not edit code |
+| `propose_test_plan` | Suggested regression/performance tests for the observed issue |
+
+
+## Agentic Debugging Workflow
+
+Use the high-level tools when you want the assistant to move from symptom to evidence instead of browsing raw rows.
+
+```text
+build_debug_brief("checkout returns 500 payment token rejected")
+create_incident_bundle("fingerprint", "<fingerprint-from-brief>", format="markdown")
+propose_fix_hypotheses("fingerprint", "<fingerprint-from-brief>")
+propose_test_plan("family_hash", "<family_hash>")
+investigate_exception_group("<fingerprint>")
+investigate_request("<family_hash>")
+```
+
+Incident bundles are generated on demand from current `OrbitEntry` data. They are not persisted. Each bundle includes primary evidence, a safety report, recommended next actions and tool suggestions for deeper investigation.
+
+## Agent Safety
+
+All MCP entry output goes through Orbit's agent-safe serializer. It masks sensitive keys using `MASK_KEYS`, can omit payloads entirely, and replaces oversized payloads with deterministic truncation metadata. Use `audit_mcp_exposure` to verify the effective policy before sharing an MCP session with an assistant.
 
 ## Example Prompts
 
@@ -115,7 +142,7 @@ This starts the server in stdio mode. It reads JSON-RPC messages from stdin and 
 
 ## How It Works
 
-The `orbit_mcp` management command calls `create_mcp_server()` from `orbit/mcp_server.py`, which builds a `FastMCP` instance with the 7 tools. Each tool queries `OrbitEntry` directly from your Django database.
+The `orbit_mcp` management command calls `create_mcp_server()` from `orbit/mcp_server.py`, which builds a `FastMCP` instance with the raw telemetry and agentic investigation tools. Each tool queries `OrbitEntry` directly from your Django database.
 
 The server is stateless and read-only — it never modifies your data.
 
