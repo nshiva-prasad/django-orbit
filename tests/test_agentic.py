@@ -207,6 +207,3 @@ def test_high_level_mcp_tools_are_registered():
     assert "investigate_request" in audit["high_level_tools"]
     assert "propose_fix_hypotheses" in audit["high_level_tools"]
     assert "propose_test_plan" in audit["high_level_tools"]
-
-
-

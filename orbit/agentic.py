@@ -602,4 +602,3 @@ def propose_test_plan(source_type: str, source_value: str, hours: int = 72) -> d
         "recommended_tests": tests,
         "safety": {"does_not_modify_code": True, "uses_masked_payloads": True},
     }
-
