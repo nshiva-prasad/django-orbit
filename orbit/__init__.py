@@ -1,9 +1,9 @@
 """
-Django Orbit - Satellite Observability for Django
+Django Orbit - AI agent-native observability for Django
 
 A modern debugging and observability tool that orbits your Django application
 without touching it. Unlike Django Debug Toolbar, Orbit lives in its own
-isolated URL with a completely separate, reactive interface.
+isolated URL and exposes structured evidence through a dashboard and MCP tools.
 """
 
 __version__ = "0.10.0"

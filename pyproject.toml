@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "django-orbit"
 version = "0.10.0"
-description = "Satellite Observability for Django - A modern debugging and observability tool"
+description = "AI agent-native observability and debugging for Django"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -18,6 +18,9 @@ keywords = [
     "django",
     "debugging",
     "observability",
+    "ai",
+    "agents",
+    "mcp",
     "monitoring",
     "telescope",
     "profiling",
@@ -73,13 +76,15 @@ Changelog = "https://github.com/astro-stack/django-orbit/blob/main/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/astro-stack/django-orbit/issues"
 
 [tool.setuptools]
-packages = ["orbit", "orbit.templatetags", "orbit.migrations", "orbit.backends"]
 include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["orbit*"]
+namespaces = true
 
 [tool.setuptools.package-data]
 orbit = [
     "templates/**/*.html",
-    "static/**/*",
 ]
 
 [tool.black]
