@@ -11,11 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added an agent-native MCP base: safe serialization, exposure audit, request investigation, exception-group investigation, on-demand incident bundles and ticket-text debug briefs.
+- Added an agent-native MCP base: safe serialization, exposure audit, request investigation, exception-group investigation, on-demand incident bundles, ticket-text debug briefs, fix hypotheses and test-plan suggestions.
 
 ### Fixed
 
 - MCP tools now honor `MCP_ENABLED: False` by returning a stable disabled response instead of exposing Orbit entries.
+- The published package now includes `orbit.management` and `orbit.management.commands`, ensuring `python manage.py orbit_mcp` is included in the wheel.
 
 ## [0.9.1] - 2026-06-15
 

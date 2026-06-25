@@ -2,8 +2,8 @@
 
 Django Orbit exposes your app's telemetry as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server. Connect Claude, Cursor, Windsurf, or any MCP-compatible AI assistant and ask questions directly against your app's live observability data.
 
-!!! tip "New in v0.7.0"
-    The MCP server is available starting from `django-orbit[mcp]`.
+!!! tip "New in v0.10.0"
+    Orbit now includes agent-native MCP investigation tools for request diagnosis, exception groups, incident bundles, fix hypotheses and test plans.
 
 ## Installation
 
