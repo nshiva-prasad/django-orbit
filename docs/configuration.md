@@ -39,11 +39,13 @@ ORBIT_CONFIG = {
     
     # MCP Server (v0.7.0+)
     'MCP_ENABLED': True,
+    'MCP_INCLUDE_PAYLOADS': True,
+    'MCP_MAX_LIMIT': 100,
+    'MCP_MAX_PAYLOAD_CHARS': 12000,
 
     # Storage Backend (v0.8.0+)
     'STORAGE_BACKEND': 'orbit.backends.database.DatabaseBackend',
     'STORAGE_DB_ALIAS': 'orbit',  # only used by DjangoDBBackend
-
     # Query recording (v0.8.1+)
     'BULK_CREATE_BATCH_SIZE': None,  # set to e.g. 500 to avoid MySQL max_allowed_packet errors
 
@@ -291,7 +293,22 @@ When `False`, watcher failures will surface as exceptions. Useful during develop
 #### `MCP_ENABLED`
 - **Type**: `bool`
 - **Default**: `True`
-- **Description**: Enables the MCP server data exposure.
+- **Description**: Enables MCP data exposure. When `False`, tools return a stable disabled response instead of reading `OrbitEntry` data.
+
+#### `MCP_INCLUDE_PAYLOADS`
+- **Type**: `bool`
+- **Default**: `True`
+- **Description**: Includes masked entry payloads in MCP responses. Set to `False` for metadata-only agent access.
+
+#### `MCP_MAX_LIMIT`
+- **Type**: `int`
+- **Default**: `100`
+- **Description**: Maximum number of entries returned by MCP tools, even when a larger limit is requested.
+
+#### `MCP_MAX_PAYLOAD_CHARS`
+- **Type**: `int`
+- **Default**: `12000`
+- **Description**: Maximum serialized payload size for agent-facing output. Larger payloads are replaced by truncation metadata after masking.
 
 See [MCP Server](mcp.md) for full setup instructions.
 

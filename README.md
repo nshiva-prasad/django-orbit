@@ -225,11 +225,13 @@ Shows the status of every Orbit module:
 
 Django Orbit exposes your telemetry as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server. Connect Claude, Cursor, Windsurf, or any MCP-compatible AI assistant and ask questions directly against your app's live data.
 
+Starting in **v0.10.0**, Orbit is designed as an **AI agent-native debugging layer** for Django: agents can move from ticket or runtime error to evidence, hypotheses, test plan and an incident bundle without needing direct database access or unsafe raw payloads.
+
 **Examples:**
-- *"Why is `/api/orders/` slow?"*
-- *"What exceptions occurred in the last hour?"*
-- *"Find all N+1 patterns in the app"*
-- *"Show me everything that happened during this request"*
+- *"Investigate this ticket: checkout returns 500 payment token rejected."*
+- *"Create an incident bundle for this exception fingerprint."*
+- *"Propose fix hypotheses for request family abc123."*
+- *"Suggest a test plan for the slow checkout request."*
 
 ### Setup
 
@@ -265,6 +267,24 @@ The MCP server launches on-demand when your AI assistant needs it. No extra proc
 | `get_request_detail` | Every event for one request via `family_hash` |
 | `search_entries` | Keyword search across all event types |
 | `get_stats_summary` | Error rate, avg response time, cache hit rate |
+| `audit_mcp_exposure` | Effective agent data exposure policy |
+| `investigate_request` | Request diagnosis with timeline, signals, query analysis and next actions |
+| `investigate_exception_group` | Exception-group blast radius and representative evidence |
+| `create_incident_bundle` | JSON or Markdown handoff bundle from request, fingerprint or ticket text |
+| `build_debug_brief` | Match natural-language ticket text to recent Orbit evidence |
+| `propose_fix_hypotheses` | Ranked fix directions based on captured evidence; does not edit code |
+| `propose_test_plan` | Suggested regression/performance tests for the observed issue |
+
+### Agent-native workflow
+
+```text
+build_debug_brief("checkout returns 500 payment token rejected")
+create_incident_bundle("fingerprint", "<fingerprint>", format="markdown")
+propose_fix_hypotheses("fingerprint", "<fingerprint>")
+propose_test_plan("family_hash", "<family_hash>")
+```
+
+All agent-facing entries go through Orbit's safe serializer: sensitive keys are masked, oversized payloads are replaced with truncation metadata, and `MCP_ENABLED: False` blocks every tool with a stable disabled response.
 
 ---
 

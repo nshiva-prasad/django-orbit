@@ -42,6 +42,7 @@ nav:
     - Stats Dashboard: stats.md
     - MCP Server: mcp.md
     - Storage Backends: storage-backends.md
+    - Agent-Native Roadmap: roadmap.md
     - Scheduled Cleanup: scheduling.md
     - Running Demo: running-demo.md
   - Reference:

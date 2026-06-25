@@ -14,10 +14,11 @@ Welcome to the Django Orbit documentation. This guide covers installation, confi
 6. [Stats Dashboard](stats.md)
 7. [MCP Server](mcp.md) ✨ **New in v0.7.0**
 8. [Storage Backends](storage-backends.md) ✨ **New in v0.8.0**
-9. [API Reference](api.md)
-10. [Customization](customization.md)
-11. [Security](security.md)
-12. [Troubleshooting](troubleshooting.md)
+9. [Agent-Native Roadmap](roadmap.md)
+10. [API Reference](api.md)
+11. [Customization](customization.md)
+12. [Security](security.md)
+13. [Troubleshooting](troubleshooting.md)
 
 ## What is Django Orbit?
 
@@ -43,6 +44,8 @@ Django Orbit is a debugging and observability tool for Django applications. Unli
 | Modern UI | Basic | Space-themed |
 
 ### What's New (Unreleased)
+
+- **Agent-native debugging roadmap**: high-level MCP investigations, incident bundles, OpenTelemetry export, AI watcher, safety layer and ticket-to-fix handoffs. See [Agent-Native Roadmap](roadmap.md).
 
 - **Dashboard UX overhaul**: a calmer, minimal redesign with a **grouped, collapsible
   sidebar** (Core / Infrastructure / Application), a standalone **All Events**, and a

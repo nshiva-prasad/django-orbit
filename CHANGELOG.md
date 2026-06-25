@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-25
+
+### Added
+
+- Added an agent-native MCP base: safe serialization, exposure audit, request investigation, exception-group investigation, on-demand incident bundles and ticket-text debug briefs.
+
+### Fixed
+
+- MCP tools now honor `MCP_ENABLED: False` by returning a stable disabled response instead of exposing Orbit entries.
+
 ## [0.9.1] - 2026-06-15
 
 ### Fixed
