@@ -1,5 +1,5 @@
 site_name: Django Orbit
-site_description: Satellite Observability for Django - A modern debugging and telemetry tool
+site_description: AI agent-native observability and debugging for Django
 site_url: https://astro-stack.github.io/django-orbit
 repo_url: https://github.com/astro-stack/django-orbit
 repo_name: astro-stack/django-orbit
@@ -42,6 +42,7 @@ nav:
     - Stats Dashboard: stats.md
     - MCP Server: mcp.md
     - Storage Backends: storage-backends.md
+    - Agent-Native Roadmap: roadmap.md
     - Scheduled Cleanup: scheduling.md
     - Running Demo: running-demo.md
   - Reference:

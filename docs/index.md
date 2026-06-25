@@ -14,14 +14,15 @@ Welcome to the Django Orbit documentation. This guide covers installation, confi
 6. [Stats Dashboard](stats.md)
 7. [MCP Server](mcp.md) ✨ **New in v0.7.0**
 8. [Storage Backends](storage-backends.md) ✨ **New in v0.8.0**
-9. [API Reference](api.md)
-10. [Customization](customization.md)
-11. [Security](security.md)
-12. [Troubleshooting](troubleshooting.md)
+9. [Agent-Native Roadmap](roadmap.md)
+10. [API Reference](api.md)
+11. [Customization](customization.md)
+12. [Security](security.md)
+13. [Troubleshooting](troubleshooting.md)
 
 ## What is Django Orbit?
 
-Django Orbit is a debugging and observability tool for Django applications. Unlike Django Debug Toolbar, which injects HTML into your templates, Orbit runs on its own isolated URL and provides a modern, reactive dashboard for monitoring your application.
+Django Orbit is an AI agent-native observability and debugging tool for Django applications. Unlike Django Debug Toolbar, which injects HTML into your templates, Orbit runs on its own isolated URL and exposes structured runtime evidence through both a human dashboard and MCP tools for AI assistants.
 
 ### Key Concepts
 
@@ -40,21 +41,34 @@ Django Orbit is a debugging and observability tool for Django applications. Unli
 | Persistent Storage | No | Yes |
 | Historical Data | No | Yes |
 | Stats & Analytics | No | Yes |
-| Modern UI | Basic | Space-themed |
+| Modern UI | Basic | Focused dashboard |
+| Agent-native MCP tools | No | Yes |
+| Ticket-to-fix handoff bundles | No | Yes |
 
-### What's New (Unreleased)
+### What's New in v0.10.0
 
-- **Dashboard UX overhaul**: a calmer, minimal redesign with a **grouped, collapsible
-  sidebar** (Core / Infrastructure / Application), a standalone **All Events**, and a
-  compact **metrics strip** that leaves more room for the feed. See [Dashboard](dashboard.md).
-- **Detail panel navigation**: move between entries with **`j`/`k`**, close with **`Esc`**,
-  plus prev/next buttons and a position indicator.
-- **First-run onboarding** tour, reopenable from the **?** button.
-- **Faster Stats page**: the headline renders instantly and heavy sections load lazily,
-  removing the old SQLite "database is locked" workaround. See [Stats](stats.md).
-- **Design system**: tokens, components and principles are documented in
-  [`DESIGN.md`](https://github.com/astro-stack/django-orbit/blob/main/DESIGN.md).
+- **Agent-native debugging base**: Orbit now exposes high-level MCP tools that help AI assistants move from ticket or runtime error to evidence, fix hypotheses, test plans and incident bundles.
+- **Safe MCP serialization**: agent-facing output masks sensitive keys, can omit payloads, bounds result sizes and truncates oversized payloads deterministically.
+- **Request and exception investigation**: `investigate_request` and `investigate_exception_group` summarize timelines, related signals, likely causes and next actions.
+- **Ticket-to-evidence workflow**: `build_debug_brief`, `create_incident_bundle`, `propose_fix_hypotheses` and `propose_test_plan` support daily developer and coding-agent workflows.
+- **MCP kill switch**: `MCP_ENABLED: False` now blocks all MCP tools with a stable disabled response.
 
+Telemetry opt-in is intentionally not included in v0.10.0. It is planned for a separate future release.
+
+### What's New in v0.9.1
+
+- **MCP server runtime fix**: `orbit_mcp` now works correctly with FastMCP's async loop by allowing Django's synchronous ORM in this local stdio server context.
+- **Exception grouping fix**: exceptions without a fingerprint are no longer hidden from the grouped Exceptions view.
+
+### What's New in v0.9.0
+
+- **Sensitive-data masking**: recursive, case-insensitive masking for tokens, passwords, API keys, cookies and related values.
+- **Query EXPLAIN**: inspect query plans from the query detail panel.
+- **Request waterfall**: see request query timing as a timeline.
+- **Tags and tag search**: attach and filter entries by operational tags.
+- **Exception grouping**: group identical exceptions by fingerprint.
+- **Dashboard redesign**: grouped sidebar, All Events, compact KPI strip, keyboard navigation and onboarding.
+- **Faster Stats page**: heavy sections now lazy-load.
 ### What's New in v0.8.1
 
 - **HTML Email Preview**: Emails sent with `EmailMultiAlternatives` now show a **Plain text / HTML preview** tab switcher in the dashboard. The HTML body renders in a sandboxed iframe — great for testing email templates. See [Email Preview](dashboard.md#mail-html-preview).
