@@ -57,7 +57,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e "${{ matrix.install-target }}"
           python -m pip install "${{ matrix.django-version }}"
-          python -m pip install pytest pytest-django
+          python -m pip install pytest pytest-django requests
           python -m pip freeze
 
       - name: Run tests
