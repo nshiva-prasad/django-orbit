@@ -45,6 +45,12 @@ Django Orbit is an AI agent-native observability and debugging tool for Django a
 | Agent-native MCP tools | No | Yes |
 | Ticket-to-fix handoff bundles | No | Yes |
 
+### What's New in v0.11.0
+
+- **Endpoint investigation**: `investigate_endpoint` summarizes endpoint health across recent requests, errors, slow requests, query signals and exception groups.
+- **Daily developer triage**: `daily_health_brief` creates a local morning brief of top exceptions, failed jobs, slow queries, N+1 candidates and warning logs.
+- **Release risk brief**: `generate_release_risk_brief` flags blocker/caution signals before deploys.
+- **MCP workflow expansion**: all new tools are available through MCP and honor the existing `MCP_ENABLED` safety gate.
 ### What's New in v0.10.0
 
 - **Agent-native debugging base**: Orbit now exposes high-level MCP tools that help AI assistants move from ticket or runtime error to evidence, fix hypotheses, test plans and incident bundles.

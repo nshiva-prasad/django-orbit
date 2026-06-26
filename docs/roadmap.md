@@ -240,7 +240,7 @@ generate_pr_context(bundle_id)
 
 ## Near-Term Priority
 
-The pragmatic next PR sequence:
+The v0.11.0 release ships endpoint investigation, daily health briefs and release risk briefs from the roadmap. The next pragmatic PR sequence:
 
 1. Add `agent_safe_serialize_entry()` and make existing MCP tools use it.
 2. Add `investigate_request(family_hash)`.
