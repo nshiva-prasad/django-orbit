@@ -1,0 +1,136 @@
+# Debug Django With Codex Using Orbit Context
+
+This workflow shows how to move from a ticket, error report or failing endpoint to a useful Codex investigation using Orbit MCP context.
+
+## 1. Run Orbit Locally
+
+Install Orbit with MCP support and run your Django app normally:
+
+```bash
+pip install "django-orbit[mcp]"
+python manage.py migrate
+python manage.py runserver
+```
+
+Configure the MCP server in your coding assistant:
+
+```json
+{
+  "mcpServers": {
+    "django-orbit": {
+      "command": "python",
+      "args": ["manage.py", "orbit_mcp"],
+      "cwd": "/path/to/your/django/project"
+    }
+  }
+}
+```
+
+Keep the MCP exposure explicit in Django settings:
+
+```python
+ORBIT_CONFIG = {
+    "MCP_ENABLED": True,
+    "MCP_INCLUDE_PAYLOADS": True,
+    "MCP_MAX_LIMIT": 100,
+    "MCP_MAX_PAYLOAD_CHARS": 12000,
+}
+```
+
+## 2. Verify Agent Safety
+
+Before asking Codex to inspect runtime context, ask it to verify the exposure policy:
+
+```text
+audit_mcp_exposure()
+find_sensitive_payload_risks(limit=20)
+list_agent_safe_fields("request")
+```
+
+If a specific entry is relevant, preview exactly what the agent can see:
+
+```text
+preview_masked_entry("<entry-id>")
+```
+
+Orbit masks sensitive keys before output and reports payload truncation when evidence is too large.
+
+## 3. Start From The Ticket Or Error
+
+Give Codex the human symptom first:
+
+```text
+Use Django Orbit context to investigate: checkout returns 500 after payment token rejection.
+Start by finding matching runtime evidence. Do not edit code until you have a regression-test plan.
+```
+
+Codex should call:
+
+```text
+build_debug_brief("checkout returns 500 after payment token rejection")
+summarize_exception_groups(hours=24)
+investigate_endpoint("/checkout/", method="POST", hours=24)
+```
+
+For performance tickets, add:
+
+```text
+find_n_plus_one_candidates(hours=24)
+```
+
+## 4. Create An Incident Bundle
+
+Once Orbit identifies a `family_hash` or exception `fingerprint`, create a bundle:
+
+```text
+create_incident_bundle("fingerprint", "<fingerprint>", format="markdown")
+```
+
+The bundle is designed for Codex, Claude and Cursor. It includes:
+
+- source metadata and severity;
+- primary runtime evidence;
+- likely code surfaces from tracebacks and query callers;
+- a suggested coding-agent prompt;
+- a next-tool sequence;
+- safety metadata confirming payload masking.
+
+Use JSON when automation needs structure:
+
+```text
+create_incident_bundle("family_hash", "<family_hash>", format="json")
+```
+
+## 5. Move From Evidence To Fix Hypothesis
+
+Ask Codex to turn the bundle into a plan:
+
+```text
+Using the Orbit incident bundle, inspect the likely code surfaces, write a failing regression test first, and propose the smallest code fix that explains the captured signals.
+```
+
+Then ask Orbit for structured support:
+
+```text
+propose_fix_hypotheses("fingerprint", "<fingerprint>")
+propose_test_plan("family_hash", "<family_hash>")
+```
+
+A good Codex handoff should produce:
+
+- the exact runtime symptom being fixed;
+- a failing test target;
+- the code surface to inspect first;
+- a minimal fix hypothesis;
+- follow-up Orbit checks after the patch.
+
+## 6. Verify Before Release
+
+After the code change and tests pass, use Orbit again:
+
+```text
+investigate_endpoint("/checkout/", method="POST", hours=24)
+generate_release_risk_brief(hours=24)
+```
+
+If blocker signals remain, keep the release closed. If the window is clean or the remaining signals are accepted, include the Orbit bundle or summary in the PR/release notes.
