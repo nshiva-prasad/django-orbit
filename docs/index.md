@@ -53,7 +53,7 @@ Django Orbit is an AI agent-native observability and debugging tool for Django a
 - **Daily developer triage**: `daily_health_brief` creates a local morning brief of top exceptions, failed jobs, slow queries, N+1 candidates and warning logs.
 - **Release risk brief**: `generate_release_risk_brief` flags blocker/caution signals before deploys.
 - **MCP workflow expansion**: all new tools are available through MCP and honor the existing `MCP_ENABLED` safety gate.
-- **Codex debugging demo**: the docs now include a practical ticket-to-test-to-fix workflow using Orbit context.
+- **Codex and Claude debugging demo**: the docs now include a practical ticket-to-test-to-fix workflow using Orbit context.
 
 ### What's New in v0.10.0
 

@@ -214,6 +214,8 @@ summarize_exception_groups(hours=24)
 
 The goal is not for Orbit to edit code. The goal is to give a human or coding agent enough structured, safe evidence to reproduce, test and fix the issue.
 
+The same flow works in Codex, Claude Desktop/Claude Code, Cursor and other MCP-compatible assistants; see the docs demo for the Claude-specific config path.
+
 ## Agent Safety
 
 Agent-facing output goes through Orbit's safe serializer:
