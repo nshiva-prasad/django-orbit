@@ -11,14 +11,15 @@ import pytest
 from django.test import override_settings
 from orbit.models import OrbitEntry
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_server():
     """Instantiate the MCP server (requires Django ORM to be ready)."""
     from orbit.mcp_server import create_mcp_server
+
     return create_mcp_server()
 
 
@@ -44,6 +45,7 @@ def _call_tool(mcp, name, **kwargs):
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mcp_server():
@@ -71,7 +73,11 @@ def sample_slow_query(db, sample_request):
         type=OrbitEntry.TYPE_QUERY,
         family_hash="abc123",
         duration_ms=1200.0,
-        payload={"sql": "SELECT * FROM products", "is_slow": True, "is_duplicate": False},
+        payload={
+            "sql": "SELECT * FROM products",
+            "is_slow": True,
+            "is_duplicate": False,
+        },
     )
 
 
@@ -107,10 +113,12 @@ def sample_n1_request(db):
 # Import guard
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_mcp_import_error_without_package(monkeypatch):
     """create_mcp_server() raises ImportError when 'mcp' is not installed."""
     import sys
+
     # Temporarily hide the mcp package
     original = sys.modules.get("mcp")
     sys.modules["mcp"] = None  # type: ignore[assignment]
@@ -118,6 +126,7 @@ def test_mcp_import_error_without_package(monkeypatch):
         # Force reimport
         import importlib
         import orbit.mcp_server as mod
+
         importlib.reload(mod)
         with pytest.raises(ImportError, match="pip install django-orbit"):
             mod.create_mcp_server()
@@ -126,7 +135,6 @@ def test_mcp_import_error_without_package(monkeypatch):
             sys.modules.pop("mcp", None)
         else:
             sys.modules["mcp"] = original
-
 
 
 @pytest.mark.django_db
@@ -149,10 +157,22 @@ def test_mcp_enabled_false_blocks_all_tools(db):
         ("audit_mcp_exposure", {}),
         ("investigate_request", {"family_hash": "blocked"}),
         ("investigate_exception_group", {"fingerprint": "fp"}),
-        ("create_incident_bundle", {"source_type": "family_hash", "source_value": "blocked"}),
+        (
+            "create_incident_bundle",
+            {"source_type": "family_hash", "source_value": "blocked"},
+        ),
         ("build_debug_brief", {"query": "private"}),
-        ("propose_fix_hypotheses", {"source_type": "family_hash", "source_value": "blocked"}),
-        ("propose_test_plan", {"source_type": "family_hash", "source_value": "blocked"}),
+        ("investigate_endpoint", {"path": "/private/"}),
+        ("daily_health_brief", {}),
+        ("generate_release_risk_brief", {}),
+        (
+            "propose_fix_hypotheses",
+            {"source_type": "family_hash", "source_value": "blocked"},
+        ),
+        (
+            "propose_test_plan",
+            {"source_type": "family_hash", "source_value": "blocked"},
+        ),
     ]
 
     for name, kwargs in calls:
@@ -166,6 +186,7 @@ def test_mcp_enabled_false_blocks_all_tools(db):
 # ---------------------------------------------------------------------------
 # Tool: get_recent_requests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_get_recent_requests_empty(mcp_server):
@@ -199,6 +220,7 @@ def test_get_recent_requests_limit_capped(mcp_server, db):
 # Tool: get_slow_queries
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_get_slow_queries_empty(mcp_server):
     data = _call_tool(mcp_server, "get_slow_queries")
@@ -223,6 +245,7 @@ def test_get_slow_queries_threshold_filters(mcp_server, sample_slow_query):
 # Tool: get_exceptions
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_get_exceptions_empty(mcp_server):
     data = _call_tool(mcp_server, "get_exceptions")
@@ -239,6 +262,7 @@ def test_get_exceptions_returns_entries(mcp_server, sample_exception):
 # ---------------------------------------------------------------------------
 # Tool: get_n1_patterns
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_get_n1_patterns_empty(mcp_server):
@@ -265,6 +289,7 @@ def test_get_n1_patterns_excludes_clean_requests(mcp_server, sample_request):
 # Tool: search_entries
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_search_entries_empty(mcp_server):
     data = _call_tool(mcp_server, "search_entries", query="nonexistent")
@@ -280,7 +305,9 @@ def test_search_entries_finds_by_keyword(mcp_server, sample_request):
 @pytest.mark.django_db
 def test_search_entries_filters_by_type(mcp_server, sample_request, sample_exception):
     # Search for "abc" (in family_hash) but only in exceptions
-    data = _call_tool(mcp_server, "search_entries", query="ValueError", entry_type="exception")
+    data = _call_tool(
+        mcp_server, "search_entries", query="ValueError", entry_type="exception"
+    )
     assert data["count"] == 1
     assert data["entries"][0]["type"] == "exception"
 
@@ -288,6 +315,7 @@ def test_search_entries_filters_by_type(mcp_server, sample_request, sample_excep
 # ---------------------------------------------------------------------------
 # Tool: get_request_detail
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_get_request_detail_not_found(mcp_server):
@@ -308,6 +336,7 @@ def test_get_request_detail_returns_all_events(
 # ---------------------------------------------------------------------------
 # Tool: get_stats_summary
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_get_stats_summary_empty(mcp_server):
