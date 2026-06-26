@@ -2,8 +2,8 @@
 
 Django Orbit exposes your app's telemetry as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server. Connect Claude, Cursor, Windsurf, or any MCP-compatible AI assistant and ask questions directly against your app's live observability data.
 
-!!! tip "New in v0.10.0"
-    Orbit now includes agent-native MCP investigation tools for request diagnosis, exception groups, incident bundles, fix hypotheses and test plans.
+!!! tip "New in v0.11.0"
+    Orbit now includes endpoint investigation, daily health briefs and release risk briefs on top of the v0.10 request/exception/ticket workflows.
 
 ## Installation
 
@@ -85,6 +85,9 @@ The MCP server exposes raw telemetry tools plus higher-level agentic investigati
 | `investigate_exception_group` | Blast-radius summary for one exception fingerprint |
 | `create_incident_bundle` | On-demand JSON handoff bundle from a request, fingerprint or ticket text |
 | `build_debug_brief` | Match natural-language ticket/error text to recent Orbit evidence |
+| `investigate_endpoint` | Endpoint health summary with error rate, slowest requests, query analysis and exception groups |
+| `daily_health_brief` | Local daily triage of exceptions, failed jobs, slow queries, N+1 candidates and warning logs |
+| `generate_release_risk_brief` | Pre-release blocker/caution summary from recent runtime evidence |
 | `propose_fix_hypotheses` | Ranked fix directions from captured evidence; does not edit code |
 | `propose_test_plan` | Suggested regression/performance tests for the observed issue |
 
@@ -98,6 +101,8 @@ build_debug_brief("checkout returns 500 payment token rejected")
 create_incident_bundle("fingerprint", "<fingerprint-from-brief>", format="markdown")
 propose_fix_hypotheses("fingerprint", "<fingerprint-from-brief>")
 propose_test_plan("family_hash", "<family_hash>")
+investigate_endpoint("/checkout/", method="POST")
+generate_release_risk_brief(hours=24)
 investigate_exception_group("<fingerprint>")
 investigate_request("<family_hash>")
 ```

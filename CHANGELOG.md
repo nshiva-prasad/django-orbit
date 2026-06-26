@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-26
+
+### Added
+
+- Added endpoint-level agentic investigation via `investigate_endpoint`, including request volume, error rate, slowest requests, query analysis, exception groups and suggested next tools.
+- Added `daily_health_brief` for local morning triage of exceptions, error requests, failed jobs, slow queries, N+1 candidates and warning logs.
+- Added `generate_release_risk_brief` to produce pre-release blocker/caution signals from recent Orbit runtime evidence.
+- Exposed the new 0.11 agentic workflow tools through MCP with the same `MCP_ENABLED` safety gate.
 ## [0.10.0] - 2026-06-25
 
 ### Added

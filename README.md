@@ -62,22 +62,16 @@ Inspired by Laravel Telescope, Spatie Ray and Django Debug Toolbar.
 
 All events can be linked by `family_hash`, which lets you inspect every query, log and exception associated with one request or operation.
 
-## What's New in v0.10.0
+## What's New in v0.11.0
 
-Orbit v0.10.0 introduces the agent-native debugging base:
+Orbit v0.11.0 expands the agent-native debugging workflow from single requests into daily and release-oriented triage:
 
-- safe MCP serialization with sensitive-key masking and deterministic truncation;
-- `audit_mcp_exposure` to inspect the effective agent data policy;
-- `investigate_request` for request-family diagnosis;
-- `investigate_exception_group` for exception blast-radius analysis;
-- `create_incident_bundle` for JSON or Markdown handoff bundles;
-- `build_debug_brief` for matching ticket/error text to Orbit evidence;
-- `propose_fix_hypotheses` for ranked fix directions;
-- `propose_test_plan` for regression/performance test suggestions;
-- `MCP_ENABLED: False` now blocks all MCP tools with a stable disabled response.
+- `investigate_endpoint` summarizes endpoint health across recent traffic;
+- `daily_health_brief` produces local morning triage for exceptions, failed jobs, slow queries, N+1 candidates and warning logs;
+- `generate_release_risk_brief` flags blocker and caution signals before deploys;
+- all new workflow tools are exposed through MCP and honor `MCP_ENABLED: False`.
 
-Telemetry opt-in is not part of v0.10.0. It is intentionally being kept for a separate future release.
-
+The 0.11 line keeps these capabilities local/open-source. Cloud monetization should focus on persistence, collaboration, alerts, shared bundles, team policies and scheduled workflows.
 ## Installation
 
 ```bash
@@ -192,6 +186,9 @@ The server launches on demand over stdio. It is read-only: it queries `OrbitEntr
 | `investigate_exception_group` | Summarize an exception fingerprint and affected paths |
 | `create_incident_bundle` | Create JSON or Markdown handoff from request, fingerprint or ticket text |
 | `build_debug_brief` | Match natural-language ticket text to recent evidence |
+| `investigate_endpoint` | Summarize endpoint health, errors, slow requests and related exceptions |
+| `daily_health_brief` | Produce local daily triage from recent runtime signals |
+| `generate_release_risk_brief` | Flag blocker/caution signals before a release |
 | `propose_fix_hypotheses` | Rank likely fix directions from captured evidence |
 | `propose_test_plan` | Suggest regression/performance tests for the observed issue |
 
