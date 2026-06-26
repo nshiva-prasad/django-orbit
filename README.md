@@ -182,11 +182,16 @@ The server launches on demand over stdio. It is read-only: it queries `OrbitEntr
 | Tool | Purpose |
 |---|---|
 | `audit_mcp_exposure` | Show the effective MCP safety policy |
+| `preview_masked_entry` | Preview one entry exactly as an agent sees it, with masked payload and risk paths |
+| `find_sensitive_payload_risks` | Find recent entries whose payload keys look like secrets, tokens or credentials |
+| `list_agent_safe_fields` | Document the allowlisted fields and payload policy per entry type |
 | `investigate_request` | Diagnose one request family: timeline, signals, queries, hypotheses and next actions |
 | `investigate_exception_group` | Summarize an exception fingerprint and affected paths |
 | `create_incident_bundle` | Create JSON or Markdown handoff from request, fingerprint or ticket text |
 | `build_debug_brief` | Match natural-language ticket text to recent evidence |
 | `investigate_endpoint` | Summarize endpoint health, errors, slow requests and related exceptions |
+| `find_n_plus_one_candidates` | Rank recent duplicate-query/N+1 candidates with suggested next tools |
+| `summarize_exception_groups` | Group recent exceptions by fingerprint with affected paths and representatives |
 | `daily_health_brief` | Produce local daily triage from recent runtime signals |
 | `generate_release_risk_brief` | Flag blocker/caution signals before a release |
 | `propose_fix_hypotheses` | Rank likely fix directions from captured evidence |
@@ -197,10 +202,14 @@ The server launches on demand over stdio. It is read-only: it queries `OrbitEntr
 A typical ticket-to-fix handoff looks like this:
 
 ```text
+audit_mcp_exposure()
+find_sensitive_payload_risks(limit=20)
 build_debug_brief("checkout returns 500 payment token rejected")
 create_incident_bundle("fingerprint", "<fingerprint>", format="markdown")
 propose_fix_hypotheses("fingerprint", "<fingerprint>")
 propose_test_plan("family_hash", "<family_hash>")
+find_n_plus_one_candidates(hours=24)
+summarize_exception_groups(hours=24)
 ```
 
 The goal is not for Orbit to edit code. The goal is to give a human or coding agent enough structured, safe evidence to reproduce, test and fix the issue.
@@ -213,7 +222,8 @@ Agent-facing output goes through Orbit's safe serializer:
 - payloads can be disabled with `MCP_INCLUDE_PAYLOADS: False`;
 - result sizes are bounded by `MCP_MAX_LIMIT`;
 - oversized payloads are replaced with truncation metadata;
-- `MCP_ENABLED: False` blocks all MCP tools with a stable disabled response.
+- `MCP_ENABLED: False` blocks all MCP tools with a stable disabled response;
+- `preview_masked_entry`, `find_sensitive_payload_risks` and `list_agent_safe_fields` let teams verify exactly what coding agents can see before sharing context.
 
 Example:
 

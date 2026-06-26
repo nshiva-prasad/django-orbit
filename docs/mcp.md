@@ -81,11 +81,16 @@ The MCP server exposes raw telemetry tools plus higher-level agentic investigati
 | `search_entries` | Keyword search across all event types |
 | `get_stats_summary` | Error rate, avg response time, cache hit rate |
 | `audit_mcp_exposure` | Effective MCP safety policy: payload inclusion, masking and limits |
+| `preview_masked_entry` | One entry as an agent will see it, with masked payload and detected risk paths |
+| `find_sensitive_payload_risks` | Recent entries whose payload keys look sensitive, without raw values |
+| `list_agent_safe_fields` | Allowlisted common fields and payload policy for one entry type |
 | `investigate_request` | Diagnosis for one `family_hash`: timeline, signals, queries, hypotheses and next actions |
 | `investigate_exception_group` | Blast-radius summary for one exception fingerprint |
 | `create_incident_bundle` | On-demand JSON handoff bundle from a request, fingerprint or ticket text |
 | `build_debug_brief` | Match natural-language ticket/error text to recent Orbit evidence |
 | `investigate_endpoint` | Endpoint health summary with error rate, slowest requests, query analysis and exception groups |
+| `find_n_plus_one_candidates` | Ranked recent requests with duplicate-query/N+1 evidence |
+| `summarize_exception_groups` | Recent exception fingerprints with counts, affected paths and representatives |
 | `daily_health_brief` | Local daily triage of exceptions, failed jobs, slow queries, N+1 candidates and warning logs |
 | `generate_release_risk_brief` | Pre-release blocker/caution summary from recent runtime evidence |
 | `propose_fix_hypotheses` | Ranked fix directions from captured evidence; does not edit code |
@@ -97,21 +102,25 @@ The MCP server exposes raw telemetry tools plus higher-level agentic investigati
 Use the high-level tools when you want the assistant to move from symptom to evidence instead of browsing raw rows.
 
 ```text
+audit_mcp_exposure()
+find_sensitive_payload_risks(limit=20)
 build_debug_brief("checkout returns 500 payment token rejected")
 create_incident_bundle("fingerprint", "<fingerprint-from-brief>", format="markdown")
 propose_fix_hypotheses("fingerprint", "<fingerprint-from-brief>")
 propose_test_plan("family_hash", "<family_hash>")
 investigate_endpoint("/checkout/", method="POST")
+find_n_plus_one_candidates(hours=24)
+summarize_exception_groups(hours=24)
 generate_release_risk_brief(hours=24)
 investigate_exception_group("<fingerprint>")
 investigate_request("<family_hash>")
 ```
 
-Incident bundles are generated on demand from current `OrbitEntry` data. They are not persisted. Each bundle includes primary evidence, a safety report, recommended next actions and tool suggestions for deeper investigation.
+Incident bundles are generated on demand from current `OrbitEntry` data. They are not persisted. Each bundle includes primary evidence, a safety report, recommended next actions, likely code surfaces, a suggested coding-agent prompt and a next-tool sequence for deeper investigation.
 
 ## Agent Safety
 
-All MCP entry output goes through Orbit's agent-safe serializer. It masks sensitive keys using `MASK_KEYS`, can omit payloads entirely, and replaces oversized payloads with deterministic truncation metadata. Use `audit_mcp_exposure` to verify the effective policy before sharing an MCP session with an assistant.
+All MCP entry output goes through Orbit's agent-safe serializer. It masks sensitive keys using `MASK_KEYS`, can omit payloads entirely, and replaces oversized payloads with deterministic truncation metadata. Use `audit_mcp_exposure`, `preview_masked_entry`, `find_sensitive_payload_risks` and `list_agent_safe_fields` to verify the effective policy before sharing an MCP session with an assistant.
 
 ## Example Prompts
 

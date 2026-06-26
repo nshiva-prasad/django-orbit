@@ -12,9 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added endpoint-level agentic investigation via `investigate_endpoint`, including request volume, error rate, slowest requests, query analysis, exception groups and suggested next tools.
+- Added MCP security audit tools: `preview_masked_entry`, `find_sensitive_payload_risks` and `list_agent_safe_fields`.
+- Added `find_n_plus_one_candidates` and `summarize_exception_groups` for higher-level daily debugging workflows.
 - Added `daily_health_brief` for local morning triage of exceptions, error requests, failed jobs, slow queries, N+1 candidates and warning logs.
 - Added `generate_release_risk_brief` to produce pre-release blocker/caution signals from recent Orbit runtime evidence.
 - Exposed the new 0.11 agentic workflow tools through MCP with the same `MCP_ENABLED` safety gate.
+- Added a documented demo flow: "Debug Django with Codex using Orbit context".
+
 ## [0.10.0] - 2026-06-25
 
 ### Added
