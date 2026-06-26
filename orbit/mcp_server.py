@@ -178,7 +178,7 @@ def create_mcp_server():
         """
         Find HTTP requests that triggered N+1 query patterns.
 
-        Returns requests where duplicate SQL queries were detected — a strong
+        Returns requests where duplicate SQL queries were detected â€” a strong
         signal of missing select_related() or prefetch_related() calls.
         Each result includes the most-duplicated query and its repetition count.
 
@@ -228,7 +228,7 @@ def create_mcp_server():
 
         Args:
             query: Search string to look for in entry payloads
-            entry_type: Optional filter — one of: request, query, log, exception,
+            entry_type: Optional filter â€” one of: request, query, log, exception,
                         command, cache, model, http_client, mail, signal, redis,
                         gate, transaction, storage, job
             limit: Number of results to return (max 100, default 20)
@@ -243,7 +243,7 @@ def create_mcp_server():
             qs = qs.filter(type=entry_type)
 
         # Search in summary (computed) via payload JSON fields
-        # Use icontains on the payload cast — works on SQLite and PostgreSQL
+        # Use icontains on the payload cast â€” works on SQLite and PostgreSQL
         from django.db.models import Q
 
         qs = qs.filter(Q(payload__icontains=query)).order_by("-created_at")[:limit]
@@ -401,6 +401,42 @@ def create_mcp_server():
         return _format_output(agentic_tools.audit_mcp_exposure())
 
     @mcp.tool()
+    def preview_masked_entry(entry_id: str) -> str:
+        """
+        Preview one Orbit entry exactly as an agent will receive it.
+
+        The response includes masked payload data, safe-field policy and detected
+        sensitive-looking payload paths without exposing raw sensitive values.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(agentic_tools.preview_masked_entry(entry_id))
+
+    @mcp.tool()
+    def find_sensitive_payload_risks(limit: int = 20) -> str:
+        """
+        Find recent entries whose payload keys look sensitive.
+
+        Use this to audit whether request/log/exception payload shapes include
+        secrets, tokens, credentials or authorization data before sharing context.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(agentic_tools.find_sensitive_payload_risks(limit=limit))
+
+    @mcp.tool()
+    def list_agent_safe_fields(entry_type: str) -> str:
+        """
+        List the fields and payload policy exposed to AI coding agents.
+
+        entry_type must be one Orbit entry type such as request, query, log or
+        exception.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(agentic_tools.list_agent_safe_fields(entry_type))
+
+    @mcp.tool()
     def investigate_request(family_hash: str, limit: int = None) -> str:
         """
         Build a high-level diagnosis for one request family.
@@ -477,6 +513,34 @@ def create_mcp_server():
             agentic_tools.investigate_endpoint(
                 path, method=method, hours=hours, limit=limit
             )
+        )
+
+    @mcp.tool()
+    def find_n_plus_one_candidates(hours: int = 24, limit: int = None) -> str:
+        """
+        Rank recent requests that show duplicate-query/N+1 evidence.
+
+        Returns endpoint, family_hash, duplicate signatures and suggested next
+        tools for each candidate.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(
+            agentic_tools.find_n_plus_one_candidates(hours=hours, limit=limit)
+        )
+
+    @mcp.tool()
+    def summarize_exception_groups(hours: int = 24, limit: int = None) -> str:
+        """
+        Summarize recent exception fingerprints for agent triage.
+
+        Returns grouped counts, first/last seen, affected paths, representatives
+        and suggested next tools.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(
+            agentic_tools.summarize_exception_groups(hours=hours, limit=limit)
         )
 
     @mcp.tool()
