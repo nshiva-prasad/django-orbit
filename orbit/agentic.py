@@ -12,7 +12,7 @@ import json
 from collections import Counter
 from typing import Any, Iterable
 
-from django.db.models import Count, Q
+from django.db.models import Avg, Count, Q
 from django.utils import timezone
 
 from orbit.conf import get_config
@@ -25,6 +25,9 @@ HIGH_LEVEL_TOOLS = [
     "investigate_exception_group",
     "create_incident_bundle",
     "build_debug_brief",
+    "investigate_endpoint",
+    "daily_health_brief",
+    "generate_release_risk_brief",
     "propose_fix_hypotheses",
     "propose_test_plan",
 ]
@@ -93,7 +96,9 @@ def agent_safe_serialize_entry(
     if include_payload is None:
         include_payload = _config_bool("MCP_INCLUDE_PAYLOADS", True)
     if max_payload_chars is None:
-        max_payload_chars = _config_int("MCP_MAX_PAYLOAD_CHARS", DEFAULT_MAX_PAYLOAD_CHARS)
+        max_payload_chars = _config_int(
+            "MCP_MAX_PAYLOAD_CHARS", DEFAULT_MAX_PAYLOAD_CHARS
+        )
 
     data: dict[str, Any] = {
         "id": str(entry.id),
@@ -113,7 +118,9 @@ def agent_safe_serialize_entry(
         data["payload_omitted"] = True
         return data
 
-    payload, truncated, original_size = _truncate_payload(entry.payload, max_payload_chars)
+    payload, truncated, original_size = _truncate_payload(
+        entry.payload, max_payload_chars
+    )
     data.update(
         {
             "payload": payload,
@@ -124,7 +131,9 @@ def agent_safe_serialize_entry(
     return data
 
 
-def _serialize_entries(entries: Iterable[OrbitEntry], *, limit: int | None = None) -> list[dict[str, Any]]:
+def _serialize_entries(
+    entries: Iterable[OrbitEntry], *, limit: int | None = None
+) -> list[dict[str, Any]]:
     safe_limit = _safe_limit(limit, DEFAULT_MAX_EVENTS)
     return [agent_safe_serialize_entry(entry) for entry in list(entries)[:safe_limit]]
 
@@ -140,11 +149,19 @@ def _diagnose(entries: list[OrbitEntry]) -> dict[str, Any]:
         signals.append("exception")
     if any(entry.type == OrbitEntry.TYPE_LOG and entry.is_error for entry in entries):
         signals.append("error_log")
-    if any(entry.type == OrbitEntry.TYPE_QUERY and entry.payload.get("is_slow") for entry in entries):
+    if any(
+        entry.type == OrbitEntry.TYPE_QUERY and entry.payload.get("is_slow")
+        for entry in entries
+    ):
         signals.append("slow_query")
-    if any(entry.type == OrbitEntry.TYPE_QUERY and entry.payload.get("is_duplicate") for entry in entries):
+    if any(
+        entry.type == OrbitEntry.TYPE_QUERY and entry.payload.get("is_duplicate")
+        for entry in entries
+    ):
         signals.append("duplicate_query")
-    if any(entry.type == OrbitEntry.TYPE_REQUEST and entry.is_error for entry in entries):
+    if any(
+        entry.type == OrbitEntry.TYPE_REQUEST and entry.is_error for entry in entries
+    ):
         signals.append("http_error")
     if any(entry.type == OrbitEntry.TYPE_JOB and entry.is_error for entry in entries):
         signals.append("job_error")
@@ -152,20 +169,34 @@ def _diagnose(entries: list[OrbitEntry]) -> dict[str, Any]:
     severity = "ok"
     if "exception" in signals or "http_error" in signals or "job_error" in signals:
         severity = "error"
-    elif "error_log" in signals or "slow_query" in signals or "duplicate_query" in signals:
+    elif (
+        "error_log" in signals
+        or "slow_query" in signals
+        or "duplicate_query" in signals
+    ):
         severity = "warning"
 
     hypotheses = []
     if "exception" in signals:
-        hypotheses.append("An exception occurred in the request or related background flow.")
+        hypotheses.append(
+            "An exception occurred in the request or related background flow."
+        )
     if "slow_query" in signals:
-        hypotheses.append("At least one SQL query exceeded the configured slow-query threshold.")
+        hypotheses.append(
+            "At least one SQL query exceeded the configured slow-query threshold."
+        )
     if "duplicate_query" in signals:
-        hypotheses.append("Duplicate SQL queries suggest a possible N+1 or missing eager loading pattern.")
+        hypotheses.append(
+            "Duplicate SQL queries suggest a possible N+1 or missing eager loading pattern."
+        )
     if "error_log" in signals:
-        hypotheses.append("Error-level logs near the event may contain the domain-specific failure reason.")
+        hypotheses.append(
+            "Error-level logs near the event may contain the domain-specific failure reason."
+        )
     if not hypotheses:
-        hypotheses.append("No strong failure signal was found in the captured Orbit entries.")
+        hypotheses.append(
+            "No strong failure signal was found in the captured Orbit entries."
+        )
 
     return {
         "severity": severity,
@@ -178,10 +209,11 @@ def _query_analysis(entries: list[OrbitEntry]) -> dict[str, Any]:
     queries = [entry for entry in entries if entry.type == OrbitEntry.TYPE_QUERY]
     slow = [entry for entry in queries if entry.payload.get("is_slow")]
     duplicate = [entry for entry in queries if entry.payload.get("is_duplicate")]
-    top_slow = sorted(queries, key=lambda entry: entry.duration_ms or 0, reverse=True)[:5]
+    top_slow = sorted(queries, key=lambda entry: entry.duration_ms or 0, reverse=True)[
+        :5
+    ]
     duplicate_signatures = Counter(
-        (entry.payload.get("sql") or "")[:180]
-        for entry in duplicate
+        (entry.payload.get("sql") or "")[:180] for entry in duplicate
     )
     return {
         "total": len(queries),
@@ -211,16 +243,26 @@ def _timeline(entries: list[OrbitEntry]) -> list[dict[str, Any]]:
 
 
 def _recommended_next_actions(diagnosis: dict[str, Any]) -> list[str]:
-    actions = ["Review the timeline and representative error context before editing code."]
+    actions = [
+        "Review the timeline and representative error context before editing code."
+    ]
     signals = set(diagnosis.get("signals", []))
     if "exception" in signals:
-        actions.append("Inspect the representative traceback and add a regression test for the failing path.")
+        actions.append(
+            "Inspect the representative traceback and add a regression test for the failing path."
+        )
     if "duplicate_query" in signals:
-        actions.append("Check ORM relationships for select_related() or prefetch_related() opportunities.")
+        actions.append(
+            "Check ORM relationships for select_related() or prefetch_related() opportunities."
+        )
     if "slow_query" in signals:
-        actions.append("Run EXPLAIN for the slowest SELECT query and review indexes/filter shape.")
+        actions.append(
+            "Run EXPLAIN for the slowest SELECT query and review indexes/filter shape."
+        )
     if "error_log" in signals:
-        actions.append("Use nearby error logs to narrow the domain condition that triggered the failure.")
+        actions.append(
+            "Use nearby error logs to narrow the domain condition that triggered the failure."
+        )
     return actions
 
 
@@ -231,7 +273,9 @@ def audit_mcp_exposure() -> dict[str, Any]:
         "mcp_enabled": bool(config.get("MCP_ENABLED", True)),
         "include_payloads": bool(config.get("MCP_INCLUDE_PAYLOADS", True)),
         "max_limit": _config_int("MCP_MAX_LIMIT", 100),
-        "max_payload_chars": _config_int("MCP_MAX_PAYLOAD_CHARS", DEFAULT_MAX_PAYLOAD_CHARS),
+        "max_payload_chars": _config_int(
+            "MCP_MAX_PAYLOAD_CHARS", DEFAULT_MAX_PAYLOAD_CHARS
+        ),
         "high_level_tools": HIGH_LEVEL_TOOLS,
         "safety": {
             "serializer": "agent_safe_serialize_entry",
@@ -244,11 +288,18 @@ def audit_mcp_exposure() -> dict[str, Any]:
 
 def investigate_request(family_hash: str, limit: int | None = None) -> dict[str, Any]:
     """Build a bounded diagnosis for one request family."""
-    entries = list(OrbitEntry.objects.for_family(family_hash)[: _safe_limit(limit, DEFAULT_MAX_EVENTS)])
+    entries = list(
+        OrbitEntry.objects.for_family(family_hash)[
+            : _safe_limit(limit, DEFAULT_MAX_EVENTS)
+        ]
+    )
     if not entries:
         return {"error": f"No entries found for family_hash: {family_hash}"}
 
-    request = next((entry for entry in entries if entry.type == OrbitEntry.TYPE_REQUEST), entries[0])
+    request = next(
+        (entry for entry in entries if entry.type == OrbitEntry.TYPE_REQUEST),
+        entries[0],
+    )
     diagnosis = _diagnose(entries)
     return {
         "family_hash": family_hash,
@@ -266,28 +317,39 @@ def _affected_paths_for_families(family_hashes: list[str]) -> list[dict[str, Any
     if not family_hashes:
         return []
     rows = (
-        OrbitEntry.objects.filter(type=OrbitEntry.TYPE_REQUEST, family_hash__in=family_hashes)
+        OrbitEntry.objects.filter(
+            type=OrbitEntry.TYPE_REQUEST, family_hash__in=family_hashes
+        )
         .values("payload__path")
         .annotate(count=Count("id"))
         .order_by("-count")[:10]
     )
     return [
-        {"path": row.get("payload__path") or "?", "count": row["count"]}
-        for row in rows
+        {"path": row.get("payload__path") or "?", "count": row["count"]} for row in rows
     ]
 
 
-def investigate_exception_group(fingerprint: str, limit: int | None = None) -> dict[str, Any]:
+def investigate_exception_group(
+    fingerprint: str, limit: int | None = None
+) -> dict[str, Any]:
     """Summarize one exception fingerprint with blast-radius context."""
     safe_limit = _safe_limit(limit, 50)
-    qs = OrbitEntry.objects.exceptions().filter(fingerprint=fingerprint).order_by("-created_at")
+    qs = (
+        OrbitEntry.objects.exceptions()
+        .filter(fingerprint=fingerprint)
+        .order_by("-created_at")
+    )
     representative = qs.first()
     if representative is None:
         return {"error": f"No exception group found for fingerprint: {fingerprint}"}
 
     exceptions = list(qs[:safe_limit])
     family_hashes = [entry.family_hash for entry in exceptions if entry.family_hash]
-    related = list(OrbitEntry.objects.filter(family_hash__in=family_hashes).order_by("created_at")[:DEFAULT_MAX_EVENTS])
+    related = list(
+        OrbitEntry.objects.filter(family_hash__in=family_hashes).order_by("created_at")[
+            :DEFAULT_MAX_EVENTS
+        ]
+    )
     diagnosis = _diagnose(related or exceptions)
     return {
         "fingerprint": fingerprint,
@@ -302,8 +364,9 @@ def investigate_exception_group(fingerprint: str, limit: int | None = None) -> d
     }
 
 
-
-def _resolve_source(source_type: str, source_value: str, hours: int = 72) -> dict[str, Any]:
+def _resolve_source(
+    source_type: str, source_value: str, hours: int = 72
+) -> dict[str, Any]:
     if source_type == "family_hash":
         return investigate_request(source_value)
     if source_type == "fingerprint":
@@ -371,21 +434,25 @@ def _bundle_to_markdown(bundle: dict[str, Any]) -> str:
 
     if primary.get("family_hash"):
         request = primary.get("request") or {}
-        lines.extend([
-            "",
-            "## Request",
-            f"- Family hash: `{primary.get('family_hash')}`",
-            f"- Summary: {request.get('summary', '?')}",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Request",
+                f"- Family hash: `{primary.get('family_hash')}`",
+                f"- Summary: {request.get('summary', '?')}",
+            ]
+        )
     if primary.get("fingerprint"):
         representative = primary.get("representative") or {}
-        lines.extend([
-            "",
-            "## Exception Group",
-            f"- Fingerprint: `{primary.get('fingerprint')}`",
-            f"- Count: `{primary.get('count')}`",
-            f"- Representative: {representative.get('summary', '?')}",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Exception Group",
+                f"- Fingerprint: `{primary.get('fingerprint')}`",
+                f"- Count: `{primary.get('count')}`",
+                f"- Representative: {representative.get('summary', '?')}",
+            ]
+        )
 
     events = primary.get("events") or primary.get("recent_occurrences") or []
     if events:
@@ -393,30 +460,36 @@ def _bundle_to_markdown(bundle: dict[str, Any]) -> str:
         for event in events[:5]:
             lines.append(f"- `{event.get('type')}` {event.get('summary', '?')}")
 
-
     query_analysis = primary.get("query_analysis") or {}
     if query_analysis:
-        lines.extend([
-            "",
-            "## Query Analysis",
-            f"- Total queries: `{query_analysis.get('total', 0)}`",
-            f"- Slow queries: `{query_analysis.get('slow_count', 0)}`",
-            f"- Duplicate queries: `{query_analysis.get('duplicate_count', 0)}`",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Query Analysis",
+                f"- Total queries: `{query_analysis.get('total', 0)}`",
+                f"- Slow queries: `{query_analysis.get('slow_count', 0)}`",
+                f"- Duplicate queries: `{query_analysis.get('duplicate_count', 0)}`",
+            ]
+        )
 
     lines.extend(["", "## Recommended Next Actions"])
     for action in bundle.get("agent_handoff", {}).get("recommended_next_actions") or []:
         lines.append(f"- {action}")
 
-    lines.extend([
-        "",
-        "## Safety",
-        "- Payloads are masked before export.",
-        "- Oversized payloads are replaced with truncation metadata.",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Safety",
+            "- Payloads are masked before export.",
+            "- Oversized payloads are replaced with truncation metadata.",
+        ]
+    )
     return "\n".join(lines) + "\n"
 
-def create_incident_bundle(source_type: str, source_value: str, hours: int = 72, format: str = "json") -> dict[str, Any] | str:
+
+def create_incident_bundle(
+    source_type: str, source_value: str, hours: int = 72, format: str = "json"
+) -> dict[str, Any] | str:
     """Create an on-demand agent handoff bundle without persisting state."""
     primary = _resolve_source(source_type, source_value, hours=hours)
     if "error" in primary:
@@ -436,10 +509,22 @@ def create_incident_bundle(source_type: str, source_value: str, hours: int = 72,
         "agent_handoff": {
             "recommended_next_actions": _recommended_next_actions(diagnosis),
             "suggested_tools": [
-                {"tool": "investigate_request", "when": "Use when a family_hash is identified."},
-                {"tool": "investigate_exception_group", "when": "Use when an exception fingerprint is identified."},
-                {"tool": "propose_fix_hypotheses", "when": "Use after the bundle identifies the dominant failure signal."},
-                {"tool": "propose_test_plan", "when": "Use before handing the issue to a coding agent."},
+                {
+                    "tool": "investigate_request",
+                    "when": "Use when a family_hash is identified.",
+                },
+                {
+                    "tool": "investigate_exception_group",
+                    "when": "Use when an exception fingerprint is identified.",
+                },
+                {
+                    "tool": "propose_fix_hypotheses",
+                    "when": "Use after the bundle identifies the dominant failure signal.",
+                },
+                {
+                    "tool": "propose_test_plan",
+                    "when": "Use before handing the issue to a coding agent.",
+                },
             ],
         },
     }
@@ -453,7 +538,7 @@ def create_incident_bundle(source_type: str, source_value: str, hours: int = 72,
 def _search_terms(query: str) -> list[str]:
     terms = []
     for raw in query.replace("/", " ").replace("_", " ").split():
-        term = raw.strip().strip('"\'.,:;()[]{}').lower()
+        term = raw.strip().strip("\"'.,:;()[]{}").lower()
         if len(term) >= 3 and term not in terms:
             terms.append(term)
     return terms[:8]
@@ -466,7 +551,9 @@ def _build_search_q(terms: list[str]) -> Q:
     return condition
 
 
-def build_debug_brief(query: str, hours: int = 72, limit: int | None = None) -> dict[str, Any]:
+def build_debug_brief(
+    query: str, hours: int = 72, limit: int | None = None
+) -> dict[str, Any]:
     """Match ticket/error text to recent Orbit evidence and suggest next tools."""
     safe_limit = _safe_limit(limit, 10)
     terms = _search_terms(query)
@@ -480,7 +567,11 @@ def build_debug_brief(query: str, hours: int = 72, limit: int | None = None) -> 
         }
 
     condition = _build_search_q(terms)
-    base = OrbitEntry.objects.filter(created_at__gte=since).filter(condition).order_by("-created_at")
+    base = (
+        OrbitEntry.objects.filter(created_at__gte=since)
+        .filter(condition)
+        .order_by("-created_at")
+    )
     requests = list(base.filter(type=OrbitEntry.TYPE_REQUEST)[:safe_limit])
     exceptions = list(base.filter(type=OrbitEntry.TYPE_EXCEPTION)[:safe_limit])
     logs = list(base.filter(type=OrbitEntry.TYPE_LOG)[:safe_limit])
@@ -489,13 +580,27 @@ def build_debug_brief(query: str, hours: int = 72, limit: int | None = None) -> 
     if exceptions:
         fp = exceptions[0].fingerprint
         if fp:
-            suggested.append({"tool": "create_incident_bundle", "source_type": "fingerprint", "source_value": fp})
+            suggested.append(
+                {
+                    "tool": "create_incident_bundle",
+                    "source_type": "fingerprint",
+                    "source_value": fp,
+                }
+            )
             suggested.append({"tool": "investigate_exception_group", "fingerprint": fp})
     if requests:
         family_hash = requests[0].family_hash
         if family_hash:
-            suggested.append({"tool": "create_incident_bundle", "source_type": "family_hash", "source_value": family_hash})
-            suggested.append({"tool": "investigate_request", "family_hash": family_hash})
+            suggested.append(
+                {
+                    "tool": "create_incident_bundle",
+                    "source_type": "family_hash",
+                    "source_value": family_hash,
+                }
+            )
+            suggested.append(
+                {"tool": "investigate_request", "family_hash": family_hash}
+            )
 
     return {
         "query": query,
@@ -509,7 +614,336 @@ def build_debug_brief(query: str, hours: int = 72, limit: int | None = None) -> 
         "suggested_tools": suggested,
     }
 
-def propose_fix_hypotheses(source_type: str, source_value: str, hours: int = 72) -> dict[str, Any]:
+
+def _window_start(hours: int) -> Any:
+    try:
+        safe_hours = max(1, int(hours or 24))
+    except (TypeError, ValueError):
+        safe_hours = 24
+    return timezone.now() - timezone.timedelta(hours=safe_hours)
+
+
+def _request_filter(path: str, method: str | None = None) -> Q:
+    condition = Q(payload__path=path) | Q(payload__full_path=path)
+    if method:
+        condition &= Q(payload__method=str(method).upper())
+    return condition
+
+
+def _percent(numerator: int, denominator: int) -> float:
+    if not denominator:
+        return 0.0
+    return round(numerator / denominator * 100, 1)
+
+
+def _request_family_hashes(requests: Iterable[OrbitEntry]) -> list[str]:
+    hashes: list[str] = []
+    for request in requests:
+        if request.family_hash and request.family_hash not in hashes:
+            hashes.append(request.family_hash)
+    return hashes
+
+
+def _top_exception_groups_for_families(
+    family_hashes: list[str], limit: int = 5
+) -> list[dict[str, Any]]:
+    if not family_hashes:
+        return []
+    rows = (
+        OrbitEntry.objects.exceptions()
+        .filter(family_hash__in=family_hashes)
+        .values("fingerprint")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:limit]
+    )
+    groups = []
+    for row in rows:
+        fingerprint = row.get("fingerprint") or ""
+        representative = (
+            OrbitEntry.objects.exceptions()
+            .filter(family_hash__in=family_hashes, fingerprint=fingerprint)
+            .order_by("-created_at")
+            .first()
+        )
+        groups.append(
+            {
+                "fingerprint": fingerprint,
+                "count": row["count"],
+                "representative": (
+                    agent_safe_serialize_entry(representative)
+                    if representative
+                    else None
+                ),
+            }
+        )
+    return groups
+
+
+def investigate_endpoint(
+    path: str, method: str | None = None, hours: int = 24, limit: int | None = None
+) -> dict[str, Any]:
+    """Summarize recent health for one endpoint path and optional method."""
+    safe_limit = _safe_limit(limit, 10)
+    since = _window_start(hours)
+    requests = list(
+        OrbitEntry.objects.requests()
+        .filter(created_at__gte=since)
+        .filter(_request_filter(path, method))
+        .order_by("-created_at")
+    )
+    if not requests:
+        return {
+            "endpoint": {"path": path, "method": method.upper() if method else None},
+            "hours": hours,
+            "request_count": 0,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "avg_duration_ms": None,
+            "slowest_requests": [],
+            "top_exception_groups": [],
+            "query_analysis": {"total": 0, "slow_count": 0, "duplicate_count": 0},
+            "suggested_tools": [],
+        }
+
+    family_hashes = _request_family_hashes(requests)
+    related = list(
+        OrbitEntry.objects.filter(family_hash__in=family_hashes).order_by("created_at")
+    )
+    error_count = sum(1 for request in requests if request.is_error)
+    avg_duration = (
+        OrbitEntry.objects.requests()
+        .filter(id__in=[request.id for request in requests], duration_ms__isnull=False)
+        .aggregate(avg=Avg("duration_ms"))["avg"]
+    )
+    slowest = sorted(requests, key=lambda entry: entry.duration_ms or 0, reverse=True)[
+        :safe_limit
+    ]
+    suggested = []
+    if slowest and slowest[0].family_hash:
+        suggested.append(
+            {"tool": "investigate_request", "family_hash": slowest[0].family_hash}
+        )
+    groups = _top_exception_groups_for_families(family_hashes, limit=safe_limit)
+    if groups and groups[0].get("fingerprint"):
+        suggested.append(
+            {
+                "tool": "investigate_exception_group",
+                "fingerprint": groups[0]["fingerprint"],
+            }
+        )
+
+    return {
+        "endpoint": {"path": path, "method": method.upper() if method else None},
+        "hours": hours,
+        "request_count": len(requests),
+        "error_count": error_count,
+        "error_rate_pct": _percent(error_count, len(requests)),
+        "avg_duration_ms": round(avg_duration, 1) if avg_duration is not None else None,
+        "slowest_requests": _serialize_entries(slowest, limit=safe_limit),
+        "top_exception_groups": groups,
+        "query_analysis": _query_analysis(related),
+        "suggested_tools": suggested,
+    }
+
+
+def _failed_jobs_since(since: Any):
+    return (
+        OrbitEntry.objects.jobs()
+        .filter(created_at__gte=since)
+        .filter(
+            Q(payload__status="failed")
+            | Q(payload__status="error")
+            | Q(payload__success=False)
+        )
+    )
+
+
+def daily_health_brief(hours: int = 24, limit: int | None = None) -> dict[str, Any]:
+    """Create a local morning-style brief of actionable Orbit signals."""
+    safe_limit = _safe_limit(limit, 10)
+    since = _window_start(hours)
+    base = OrbitEntry.objects.filter(created_at__gte=since)
+    requests = base.filter(type=OrbitEntry.TYPE_REQUEST)
+    error_requests = [entry for entry in requests if entry.is_error]
+    exceptions = list(
+        base.filter(type=OrbitEntry.TYPE_EXCEPTION).order_by("-created_at")[:safe_limit]
+    )
+    slow_queries = list(
+        base.filter(type=OrbitEntry.TYPE_QUERY, payload__is_slow=True).order_by(
+            "-duration_ms"
+        )[:safe_limit]
+    )
+    duplicate_requests = list(
+        requests.filter(payload__duplicate_query_count__gt=0).order_by(
+            "-payload__duplicate_query_count"
+        )[:safe_limit]
+    )
+    failed_jobs = list(_failed_jobs_since(since).order_by("-created_at")[:safe_limit])
+    warning_logs = list(
+        base.filter(type=OrbitEntry.TYPE_LOG, payload__level="WARNING").order_by(
+            "-created_at"
+        )[:safe_limit]
+    )
+
+    issues: list[dict[str, Any]] = []
+    for exception in exceptions:
+        issues.append(
+            {
+                "type": "exception",
+                "severity": "error",
+                "summary": exception.summary,
+                "fingerprint": exception.fingerprint,
+                "entry": agent_safe_serialize_entry(exception, include_payload=False),
+            }
+        )
+    for request in error_requests[:safe_limit]:
+        issues.append(
+            {
+                "type": "http_error",
+                "severity": "error",
+                "summary": request.summary,
+                "family_hash": request.family_hash,
+                "entry": agent_safe_serialize_entry(request, include_payload=False),
+            }
+        )
+    for job in failed_jobs:
+        issues.append(
+            {
+                "type": "job_failure",
+                "severity": "error",
+                "summary": job.summary,
+                "family_hash": job.family_hash,
+                "entry": agent_safe_serialize_entry(job, include_payload=False),
+            }
+        )
+    for query in slow_queries:
+        issues.append(
+            {
+                "type": "slow_query",
+                "severity": "warning",
+                "summary": query.summary,
+                "family_hash": query.family_hash,
+                "entry": agent_safe_serialize_entry(query, include_payload=False),
+            }
+        )
+
+    severity_order = {"error": 0, "warning": 1, "info": 2}
+    issues = sorted(issues, key=lambda item: severity_order.get(item["severity"], 9))[
+        :safe_limit
+    ]
+    return {
+        "hours": hours,
+        "summary": {
+            "requests": requests.count(),
+            "error_requests": len(error_requests),
+            "exceptions": base.filter(type=OrbitEntry.TYPE_EXCEPTION).count(),
+            "slow_queries": base.filter(
+                type=OrbitEntry.TYPE_QUERY, payload__is_slow=True
+            ).count(),
+            "n_plus_one_candidates": requests.filter(
+                payload__duplicate_query_count__gt=0
+            ).count(),
+            "failed_jobs": _failed_jobs_since(since).count(),
+            "warning_logs": base.filter(
+                type=OrbitEntry.TYPE_LOG, payload__level="WARNING"
+            ).count(),
+        },
+        "top_issues": issues,
+        "duplicate_query_requests": _serialize_entries(
+            duplicate_requests, limit=safe_limit
+        ),
+        "warning_logs": _serialize_entries(warning_logs, limit=safe_limit),
+        "suggested_tools": [
+            {"tool": "generate_release_risk_brief", "when": "Run before deploying."},
+            {
+                "tool": "investigate_endpoint",
+                "when": "Use on the highest-error or slowest path.",
+            },
+            {
+                "tool": "create_incident_bundle",
+                "when": "Use for the top issue before coding.",
+            },
+        ],
+    }
+
+
+def generate_release_risk_brief(
+    hours: int = 24, limit: int | None = None
+) -> dict[str, Any]:
+    """Summarize runtime signals that should block or caution a release."""
+    safe_limit = _safe_limit(limit, 10)
+    since = _window_start(hours)
+    base = OrbitEntry.objects.filter(created_at__gte=since)
+    requests = list(base.filter(type=OrbitEntry.TYPE_REQUEST))
+    error_requests = [entry for entry in requests if entry.is_error]
+    exceptions = list(
+        base.filter(type=OrbitEntry.TYPE_EXCEPTION).order_by("-created_at")[:safe_limit]
+    )
+    slow_queries = list(
+        base.filter(type=OrbitEntry.TYPE_QUERY, payload__is_slow=True).order_by(
+            "-duration_ms"
+        )[:safe_limit]
+    )
+    failed_jobs = list(_failed_jobs_since(since).order_by("-created_at")[:safe_limit])
+    blockers: list[str] = []
+    cautions: list[str] = []
+    if exceptions:
+        blockers.append("exception_groups")
+    if error_requests:
+        blockers.append("error_requests")
+    if failed_jobs:
+        blockers.append("failed_jobs")
+    if slow_queries:
+        cautions.append("slow_queries")
+
+    risk_level = "low"
+    recommendation = "No blocker signals found in Orbit for this release window."
+    if blockers:
+        risk_level = "blocker"
+        recommendation = (
+            "Do not release until blocker signals are investigated or accepted."
+        )
+    elif cautions:
+        risk_level = "caution"
+        recommendation = "Release with caution after reviewing warning signals."
+
+    return {
+        "hours": hours,
+        "risk_level": risk_level,
+        "blockers": blockers,
+        "cautions": cautions,
+        "checks": {
+            "error_requests": {
+                "count": len(error_requests),
+                "examples": _serialize_entries(error_requests, limit=safe_limit),
+            },
+            "exception_groups": {
+                "count": len(exceptions),
+                "examples": _serialize_entries(exceptions, limit=safe_limit),
+            },
+            "slow_queries": {
+                "count": len(slow_queries),
+                "examples": _serialize_entries(slow_queries, limit=safe_limit),
+            },
+            "failed_jobs": {
+                "count": len(failed_jobs),
+                "examples": _serialize_entries(failed_jobs, limit=safe_limit),
+            },
+        },
+        "recommendation": recommendation,
+        "suggested_tools": [
+            {"tool": "daily_health_brief", "when": "Use to inspect broader context."},
+            {
+                "tool": "create_incident_bundle",
+                "when": "Use for each blocker before fixing.",
+            },
+        ],
+    }
+
+
+def propose_fix_hypotheses(
+    source_type: str, source_value: str, hours: int = 72
+) -> dict[str, Any]:
     """Rank likely fix directions from Orbit evidence without editing code."""
     primary = _resolve_source(source_type, source_value, hours=hours)
     if "error" in primary:
@@ -519,40 +953,50 @@ def propose_fix_hypotheses(source_type: str, source_value: str, hours: int = 72)
     signals = set(diagnosis.get("signals", []))
     hypotheses = []
     if "exception" in signals:
-        hypotheses.append({
-            "title": "Fix the failing exception path",
-            "confidence": "high",
-            "evidence": "Orbit captured an exception in the matched request or exception group.",
-            "recommended_action": "Inspect the representative traceback and add a regression test before changing code.",
-        })
+        hypotheses.append(
+            {
+                "title": "Fix the failing exception path",
+                "confidence": "high",
+                "evidence": "Orbit captured an exception in the matched request or exception group.",
+                "recommended_action": "Inspect the representative traceback and add a regression test before changing code.",
+            }
+        )
     if "duplicate_query" in signals:
-        hypotheses.append({
-            "title": "Remove possible N+1 query pattern",
-            "confidence": "medium",
-            "evidence": "Duplicate SQL queries were captured in the request family.",
-            "recommended_action": "Review ORM relationship loading and consider select_related() or prefetch_related().",
-        })
+        hypotheses.append(
+            {
+                "title": "Remove possible N+1 query pattern",
+                "confidence": "medium",
+                "evidence": "Duplicate SQL queries were captured in the request family.",
+                "recommended_action": "Review ORM relationship loading and consider select_related() or prefetch_related().",
+            }
+        )
     if "slow_query" in signals:
-        hypotheses.append({
-            "title": "Optimize slow SQL path",
-            "confidence": "medium",
-            "evidence": "At least one query exceeded the slow-query threshold.",
-            "recommended_action": "Run EXPLAIN and check index/filter shape for the slowest SELECT.",
-        })
+        hypotheses.append(
+            {
+                "title": "Optimize slow SQL path",
+                "confidence": "medium",
+                "evidence": "At least one query exceeded the slow-query threshold.",
+                "recommended_action": "Run EXPLAIN and check index/filter shape for the slowest SELECT.",
+            }
+        )
     if "error_log" in signals:
-        hypotheses.append({
-            "title": "Use domain log message as failure clue",
-            "confidence": "medium",
-            "evidence": "Error-level logs were captured near the failure.",
-            "recommended_action": "Trace the log message to the application branch that emitted it.",
-        })
+        hypotheses.append(
+            {
+                "title": "Use domain log message as failure clue",
+                "confidence": "medium",
+                "evidence": "Error-level logs were captured near the failure.",
+                "recommended_action": "Trace the log message to the application branch that emitted it.",
+            }
+        )
     if not hypotheses:
-        hypotheses.append({
-            "title": "Collect more focused runtime evidence",
-            "confidence": "low",
-            "evidence": "Orbit did not capture a strong failure signal for this source.",
-            "recommended_action": "Reproduce the issue with request, query, log and exception recording enabled.",
-        })
+        hypotheses.append(
+            {
+                "title": "Collect more focused runtime evidence",
+                "confidence": "low",
+                "evidence": "Orbit did not capture a strong failure signal for this source.",
+                "recommended_action": "Reproduce the issue with request, query, log and exception recording enabled.",
+            }
+        )
 
     return {
         "source": {"type": source_type, "value": source_value},
@@ -562,7 +1006,9 @@ def propose_fix_hypotheses(source_type: str, source_value: str, hours: int = 72)
     }
 
 
-def propose_test_plan(source_type: str, source_value: str, hours: int = 72) -> dict[str, Any]:
+def propose_test_plan(
+    source_type: str, source_value: str, hours: int = 72
+) -> dict[str, Any]:
     """Suggest tests that should cover the observed runtime failure."""
     primary = _resolve_source(source_type, source_value, hours=hours)
     if "error" in primary:
@@ -572,30 +1018,40 @@ def propose_test_plan(source_type: str, source_value: str, hours: int = 72) -> d
     signals = set(diagnosis.get("signals", []))
     request = primary.get("request") or {}
     request_payload = request.get("payload") or {}
-    path = request_payload.get("path") or request_payload.get("full_path") or source_value
-    tests = [{
-        "type": "integration",
-        "target": str(path),
-        "purpose": "Reproduce the observed runtime path with Orbit evidence as the fixture for expected behavior.",
-    }]
-    if "exception" in signals:
-        tests.append({
-            "type": "unit",
-            "target": "exception branch",
-            "purpose": "Cover the failing branch from the representative traceback with a focused regression test.",
-        })
-    if "duplicate_query" in signals or "slow_query" in signals:
-        tests.append({
-            "type": "performance",
-            "target": str(path),
-            "purpose": "Assert query count or slow-query behavior does not regress after the fix.",
-        })
-    if "error_log" in signals:
-        tests.append({
+    path = (
+        request_payload.get("path") or request_payload.get("full_path") or source_value
+    )
+    tests = [
+        {
             "type": "integration",
-            "target": "logged failure condition",
-            "purpose": "Exercise the domain condition that emitted the error log.",
-        })
+            "target": str(path),
+            "purpose": "Reproduce the observed runtime path with Orbit evidence as the fixture for expected behavior.",
+        }
+    ]
+    if "exception" in signals:
+        tests.append(
+            {
+                "type": "unit",
+                "target": "exception branch",
+                "purpose": "Cover the failing branch from the representative traceback with a focused regression test.",
+            }
+        )
+    if "duplicate_query" in signals or "slow_query" in signals:
+        tests.append(
+            {
+                "type": "performance",
+                "target": str(path),
+                "purpose": "Assert query count or slow-query behavior does not regress after the fix.",
+            }
+        )
+    if "error_log" in signals:
+        tests.append(
+            {
+                "type": "integration",
+                "target": "logged failure condition",
+                "purpose": "Exercise the domain condition that emitted the error log.",
+            }
+        )
 
     return {
         "source": {"type": source_type, "value": source_value},

@@ -36,10 +36,12 @@ def _format_output(data: Any) -> str:
 
 def _mcp_disabled_output() -> str:
     """Return a stable response when MCP data exposure is disabled."""
-    return _format_output({
-        "error": "MCP data exposure is disabled by ORBIT_CONFIG['MCP_ENABLED'].",
-        "disabled": True,
-    })
+    return _format_output(
+        {
+            "error": "MCP data exposure is disabled by ORBIT_CONFIG['MCP_ENABLED'].",
+            "disabled": True,
+        }
+    )
 
 
 def create_mcp_server():
@@ -126,11 +128,13 @@ def create_mcp_server():
             .order_by("-duration_ms")[:limit]
         )
         result = [_serialize_entry(e) for e in entries]
-        return _format_output({
-            "threshold_ms": threshold,
-            "count": len(result),
-            "slow_queries": result,
-        })
+        return _format_output(
+            {
+                "threshold_ms": threshold,
+                "count": len(result),
+                "slow_queries": result,
+            }
+        )
 
     # -------------------------------------------------------------------------
     # Tool: get_exceptions
@@ -162,7 +166,9 @@ def create_mcp_server():
             .order_by("-created_at")[:limit]
         )
         result = [_serialize_entry(e) for e in entries]
-        return _format_output({"hours": hours, "count": len(result), "exceptions": result})
+        return _format_output(
+            {"hours": hours, "count": len(result), "exceptions": result}
+        )
 
     # -------------------------------------------------------------------------
     # Tool: get_n1_patterns
@@ -193,15 +199,19 @@ def create_mcp_server():
 
         results = []
         for entry in entries:
-            results.append({
-                "id": str(entry.id),
-                "path": entry.payload.get("path"),
-                "method": entry.payload.get("method"),
-                "duration_ms": entry.duration_ms,
-                "duplicate_query_count": entry.payload.get("duplicate_query_count", 0),
-                "family_hash": entry.family_hash,
-                "created_at": entry.created_at.isoformat(),
-            })
+            results.append(
+                {
+                    "id": str(entry.id),
+                    "path": entry.payload.get("path"),
+                    "method": entry.payload.get("method"),
+                    "duration_ms": entry.duration_ms,
+                    "duplicate_query_count": entry.payload.get(
+                        "duplicate_query_count", 0
+                    ),
+                    "family_hash": entry.family_hash,
+                    "created_at": entry.created_at.isoformat(),
+                }
+            )
 
         return _format_output({"count": len(results), "n1_patterns": results})
 
@@ -235,17 +245,18 @@ def create_mcp_server():
         # Search in summary (computed) via payload JSON fields
         # Use icontains on the payload cast — works on SQLite and PostgreSQL
         from django.db.models import Q
-        qs = qs.filter(
-            Q(payload__icontains=query)
-        ).order_by("-created_at")[:limit]
+
+        qs = qs.filter(Q(payload__icontains=query)).order_by("-created_at")[:limit]
 
         result = [_serialize_entry(e) for e in qs]
-        return _format_output({
-            "query": query,
-            "entry_type": entry_type,
-            "count": len(result),
-            "entries": result,
-        })
+        return _format_output(
+            {
+                "query": query,
+                "entry_type": entry_type,
+                "count": len(result),
+                "entries": result,
+            }
+        )
 
     # -------------------------------------------------------------------------
     # Tool: get_request_detail
@@ -267,7 +278,9 @@ def create_mcp_server():
 
         entries = OrbitEntry.objects.for_family(family_hash)
         if not entries.exists():
-            return _format_output({"error": f"No entries found for family_hash: {family_hash}"})
+            return _format_output(
+                {"error": f"No entries found for family_hash: {family_hash}"}
+            )
 
         result = [_serialize_entry(e) for e in entries]
 
@@ -276,12 +289,14 @@ def create_mcp_server():
         for e in result:
             by_type.setdefault(e["type"], []).append(e)
 
-        return _format_output({
-            "family_hash": family_hash,
-            "total_events": len(result),
-            "event_types": {k: len(v) for k, v in by_type.items()},
-            "events": result,
-        })
+        return _format_output(
+            {
+                "family_hash": family_hash,
+                "total_events": len(result),
+                "event_types": {k: len(v) for k, v in by_type.items()},
+                "events": result,
+            }
+        )
 
     # -------------------------------------------------------------------------
     # Tool: get_stats_summary
@@ -329,7 +344,9 @@ def create_mcp_server():
         cache_ops = base.filter(type=OrbitEntry.TYPE_CACHE)
         total_cache = cache_ops.count()
         cache_hits = cache_ops.filter(payload__hit=True).count()
-        cache_hit_rate = round(cache_hits / total_cache * 100, 1) if total_cache else None
+        cache_hit_rate = (
+            round(cache_hits / total_cache * 100, 1) if total_cache else None
+        )
 
         # Top error paths
         top_errors = (
@@ -339,27 +356,32 @@ def create_mcp_server():
             .order_by("-count")[:5]
         )
 
-        return _format_output({
-            "period_hours": hours,
-            "requests": {
-                "total": total_requests,
-                "errors": error_requests,
-                "error_rate_pct": round(error_requests / total_requests * 100, 1) if total_requests else 0,
-                "avg_duration_ms": round(avg_duration, 1) if avg_duration else None,
-            },
-            "queries": {
-                "total": total_queries,
-                "slow": slow_queries,
-                "slow_threshold_ms": slow_threshold,
-            },
-            "exceptions": {"total": total_exceptions},
-            "cache": {
-                "total_ops": total_cache,
-                "hit_rate_pct": cache_hit_rate,
-            },
-            "top_error_paths": list(top_errors),
-        })
-
+        return _format_output(
+            {
+                "period_hours": hours,
+                "requests": {
+                    "total": total_requests,
+                    "errors": error_requests,
+                    "error_rate_pct": (
+                        round(error_requests / total_requests * 100, 1)
+                        if total_requests
+                        else 0
+                    ),
+                    "avg_duration_ms": round(avg_duration, 1) if avg_duration else None,
+                },
+                "queries": {
+                    "total": total_queries,
+                    "slow": slow_queries,
+                    "slow_threshold_ms": slow_threshold,
+                },
+                "exceptions": {"total": total_exceptions},
+                "cache": {
+                    "total_ops": total_cache,
+                    "hit_rate_pct": cache_hit_rate,
+                },
+                "top_error_paths": list(top_errors),
+            }
+        )
 
     # -------------------------------------------------------------------------
     # High-level agentic tools
@@ -388,7 +410,9 @@ def create_mcp_server():
         """
         if not get_config().get("MCP_ENABLED", True):
             return _mcp_disabled_output()
-        return _format_output(agentic_tools.investigate_request(family_hash, limit=limit))
+        return _format_output(
+            agentic_tools.investigate_request(family_hash, limit=limit)
+        )
 
     @mcp.tool()
     def investigate_exception_group(fingerprint: str, limit: int = None) -> str:
@@ -400,10 +424,14 @@ def create_mcp_server():
         """
         if not get_config().get("MCP_ENABLED", True):
             return _mcp_disabled_output()
-        return _format_output(agentic_tools.investigate_exception_group(fingerprint, limit=limit))
+        return _format_output(
+            agentic_tools.investigate_exception_group(fingerprint, limit=limit)
+        )
 
     @mcp.tool()
-    def create_incident_bundle(source_type: str, source_value: str, hours: int = 72, format: str = "json") -> str:
+    def create_incident_bundle(
+        source_type: str, source_value: str, hours: int = 72, format: str = "json"
+    ) -> str:
         """
         Create an on-demand agent handoff bundle.
 
@@ -412,7 +440,9 @@ def create_mcp_server():
         """
         if not get_config().get("MCP_ENABLED", True):
             return _mcp_disabled_output()
-        result = agentic_tools.create_incident_bundle(source_type, source_value, hours=hours, format=format)
+        result = agentic_tools.create_incident_bundle(
+            source_type, source_value, hours=hours, format=format
+        )
         if isinstance(result, str):
             return result
         return _format_output(result)
@@ -427,10 +457,60 @@ def create_mcp_server():
         """
         if not get_config().get("MCP_ENABLED", True):
             return _mcp_disabled_output()
-        return _format_output(agentic_tools.build_debug_brief(query, hours=hours, limit=limit))
+        return _format_output(
+            agentic_tools.build_debug_brief(query, hours=hours, limit=limit)
+        )
 
     @mcp.tool()
-    def propose_fix_hypotheses(source_type: str, source_value: str, hours: int = 72) -> str:
+    def investigate_endpoint(
+        path: str, method: str = None, hours: int = 24, limit: int = None
+    ) -> str:
+        """
+        Summarize health for one endpoint across recent traffic.
+
+        Returns request count, error rate, slowest requests, query analysis,
+        top exception groups and suggested next tools.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(
+            agentic_tools.investigate_endpoint(
+                path, method=method, hours=hours, limit=limit
+            )
+        )
+
+    @mcp.tool()
+    def daily_health_brief(hours: int = 24, limit: int = None) -> str:
+        """
+        Generate a local daily debugging brief.
+
+        Returns top exceptions, failed jobs, slow queries, warning logs and
+        suggested next actions for human/agent triage.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(
+            agentic_tools.daily_health_brief(hours=hours, limit=limit)
+        )
+
+    @mcp.tool()
+    def generate_release_risk_brief(hours: int = 24, limit: int = None) -> str:
+        """
+        Generate a release risk brief from recent Orbit runtime signals.
+
+        Returns blocker/caution signals such as exceptions, error requests,
+        failed jobs and slow queries.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(
+            agentic_tools.generate_release_risk_brief(hours=hours, limit=limit)
+        )
+
+    @mcp.tool()
+    def propose_fix_hypotheses(
+        source_type: str, source_value: str, hours: int = 72
+    ) -> str:
         """
         Rank likely fix directions from Orbit evidence without editing code.
 
@@ -438,7 +518,9 @@ def create_mcp_server():
         """
         if not get_config().get("MCP_ENABLED", True):
             return _mcp_disabled_output()
-        return _format_output(agentic_tools.propose_fix_hypotheses(source_type, source_value, hours=hours))
+        return _format_output(
+            agentic_tools.propose_fix_hypotheses(source_type, source_value, hours=hours)
+        )
 
     @mcp.tool()
     def propose_test_plan(source_type: str, source_value: str, hours: int = 72) -> str:
@@ -449,5 +531,8 @@ def create_mcp_server():
         """
         if not get_config().get("MCP_ENABLED", True):
             return _mcp_disabled_output()
-        return _format_output(agentic_tools.propose_test_plan(source_type, source_value, hours=hours))
+        return _format_output(
+            agentic_tools.propose_test_plan(source_type, source_value, hours=hours)
+        )
+
     return mcp
