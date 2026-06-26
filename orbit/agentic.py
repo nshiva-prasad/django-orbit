@@ -12,7 +12,7 @@ import json
 from collections import Counter
 from typing import Any, Iterable
 
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, Max, Min, Q
 from django.utils import timezone
 
 from orbit.conf import get_config
@@ -24,8 +24,13 @@ HIGH_LEVEL_TOOLS = [
     "investigate_request",
     "investigate_exception_group",
     "create_incident_bundle",
+    "preview_masked_entry",
+    "find_sensitive_payload_risks",
+    "list_agent_safe_fields",
     "build_debug_brief",
     "investigate_endpoint",
+    "find_n_plus_one_candidates",
+    "summarize_exception_groups",
     "daily_health_brief",
     "generate_release_risk_brief",
     "propose_fix_hypotheses",
@@ -34,6 +39,46 @@ HIGH_LEVEL_TOOLS = [
 
 DEFAULT_MAX_PAYLOAD_CHARS = 12000
 DEFAULT_MAX_EVENTS = 100
+
+
+COMMON_AGENT_SAFE_FIELDS = [
+    "id",
+    "type",
+    "summary",
+    "duration_ms",
+    "family_hash",
+    "fingerprint",
+    "tags",
+    "created_at",
+    "is_error",
+    "is_warning",
+    "payload_masked",
+]
+
+PAYLOAD_POLICY_BY_TYPE = {
+    OrbitEntry.TYPE_REQUEST: {
+        "included_by_default": True,
+        "high_risk_paths": [
+            "headers.Authorization",
+            "headers.Cookie",
+            "body.password",
+            "body.token",
+            "query.password",
+        ],
+    },
+    OrbitEntry.TYPE_QUERY: {
+        "included_by_default": True,
+        "high_risk_paths": ["params", "sql literals"],
+    },
+    OrbitEntry.TYPE_EXCEPTION: {
+        "included_by_default": True,
+        "high_risk_paths": ["locals", "traceback_string", "message"],
+    },
+    OrbitEntry.TYPE_LOG: {
+        "included_by_default": True,
+        "high_risk_paths": ["message", "extra", "context"],
+    },
+}
 
 
 def _config_int(name: str, default: int) -> int:
@@ -286,6 +331,121 @@ def audit_mcp_exposure() -> dict[str, Any]:
     }
 
 
+def _sensitive_key_fragments() -> list[str]:
+    return [str(key).lower() for key in get_config().get("MASK_KEYS", [])]
+
+
+def _key_looks_sensitive(key: Any) -> bool:
+    lowered = str(key).lower()
+    return any(
+        fragment and fragment in lowered for fragment in _sensitive_key_fragments()
+    )
+
+
+def _find_sensitive_paths(value: Any, prefix: str = "payload") -> list[str]:
+    paths: list[str] = []
+
+    def _walk(item: Any, path: str) -> None:
+        if isinstance(item, dict):
+            for key, child in item.items():
+                child_path = f"{path}.{key}"
+                if _key_looks_sensitive(key):
+                    paths.append(child_path)
+                _walk(child, child_path)
+        elif isinstance(item, list):
+            for index, child in enumerate(item[:20]):
+                _walk(child, f"{path}[{index}]")
+
+    _walk(value, prefix)
+    deduped: list[str] = []
+    for path in paths:
+        if path not in deduped:
+            deduped.append(path)
+    return deduped
+
+
+def list_agent_safe_fields(entry_type: str) -> dict[str, Any]:
+    """Describe which fields Orbit exposes to coding agents for one entry type."""
+    supported_types = {choice[0] for choice in OrbitEntry.TYPE_CHOICES}
+    if entry_type not in supported_types:
+        return {"error": f"Unsupported entry_type: {entry_type}"}
+
+    type_policy = PAYLOAD_POLICY_BY_TYPE.get(
+        entry_type,
+        {"included_by_default": True, "high_risk_paths": ["payload.*"]},
+    )
+    return {
+        "entry_type": entry_type,
+        "common_fields": COMMON_AGENT_SAFE_FIELDS,
+        "payload_policy": {
+            "included_by_default": bool(type_policy["included_by_default"]),
+            "masked": True,
+            "truncated": True,
+            "max_payload_chars": _config_int(
+                "MCP_MAX_PAYLOAD_CHARS", DEFAULT_MAX_PAYLOAD_CHARS
+            ),
+            "high_risk_paths": type_policy["high_risk_paths"],
+        },
+    }
+
+
+def preview_masked_entry(entry_id: str) -> dict[str, Any]:
+    """Return one entry exactly as an agent would see it, with safety metadata."""
+    try:
+        entry = OrbitEntry.objects.filter(id=entry_id).first()
+    except Exception:
+        entry = None
+    if entry is None:
+        return {"error": f"No entry found for id: {entry_id}"}
+
+    risk_keys = _find_sensitive_paths(entry.payload or {})
+    return {
+        "entry": agent_safe_serialize_entry(entry),
+        "safe_fields": list_agent_safe_fields(entry.type),
+        "risk_keys": risk_keys,
+        "safety_report": {
+            "payloads_masked": True,
+            "payload_truncation_enabled": True,
+            "raw_payload_exposed": False,
+            "serializer": "agent_safe_serialize_entry",
+        },
+    }
+
+
+def find_sensitive_payload_risks(limit: int = 20) -> dict[str, Any]:
+    """Find recent entries whose payload shape contains sensitive-looking keys."""
+    safe_limit = _safe_limit(limit, 20)
+    scan_limit = min(_config_int("MCP_MAX_LIMIT", 100), safe_limit * 5)
+    candidates = []
+    for entry in OrbitEntry.objects.order_by("-created_at")[:scan_limit]:
+        risk_keys = _find_sensitive_paths(entry.payload or {})
+        if not risk_keys:
+            continue
+        candidates.append(
+            {
+                "id": str(entry.id),
+                "type": entry.type,
+                "summary": entry.summary,
+                "family_hash": entry.family_hash,
+                "fingerprint": entry.fingerprint,
+                "created_at": entry.created_at.isoformat(),
+                "risk_keys": risk_keys,
+                "masked_preview": agent_safe_serialize_entry(entry),
+            }
+        )
+        if len(candidates) >= safe_limit:
+            break
+    return {
+        "count": len(candidates),
+        "candidates": candidates,
+        "safety_report": {
+            "raw_values_exposed": False,
+            "payloads_masked": True,
+            "scan_limit": scan_limit,
+        },
+    }
+
+
 def investigate_request(family_hash: str, limit: int | None = None) -> dict[str, Any]:
     """Build a bounded diagnosis for one request family."""
     entries = list(
@@ -413,6 +573,7 @@ def _bundle_to_markdown(bundle: dict[str, Any]) -> str:
     primary = bundle.get("primary", {})
     diagnosis = _diagnosis_from_primary(primary)
     source = bundle.get("source", {})
+    handoff = bundle.get("agent_handoff", {})
     lines = [
         "# Django Orbit Incident Bundle",
         "",
@@ -420,8 +581,20 @@ def _bundle_to_markdown(bundle: dict[str, Any]) -> str:
         f"- Generated: `{bundle.get('generated_at')}`",
         f"- Severity: `{diagnosis.get('severity', 'unknown')}`",
         "",
-        "## Signals",
+        "## Agent Handoff",
+        "Use this bundle in Codex, Claude or Cursor before editing code.",
+        "",
+        "Suggested prompt:",
+        "",
+        f"> {handoff.get('suggested_prompt', 'Investigate this Django issue using the Orbit evidence below.')}",
+        "",
+        "Next tool sequence:",
     ]
+    for tool in handoff.get("next_tool_sequence") or []:
+        args = {key: value for key, value in tool.items() if key != "tool"}
+        lines.append(f"- `{tool.get('tool')}` {json.dumps(args, default=str)}")
+
+    lines.extend(["", "## Signals"])
     signals = diagnosis.get("signals") or []
     if signals:
         lines.extend(f"- `{signal}`" for signal in signals)
@@ -472,8 +645,13 @@ def _bundle_to_markdown(bundle: dict[str, Any]) -> str:
             ]
         )
 
+    surfaces = bundle.get("likely_code_surfaces") or []
+    if surfaces:
+        lines.extend(["", "## Likely Code Surfaces"])
+        lines.extend(f"- `{surface}`" for surface in surfaces)
+
     lines.extend(["", "## Recommended Next Actions"])
-    for action in bundle.get("agent_handoff", {}).get("recommended_next_actions") or []:
+    for action in handoff.get("recommended_next_actions") or []:
         lines.append(f"- {action}")
 
     lines.extend(
@@ -481,6 +659,7 @@ def _bundle_to_markdown(bundle: dict[str, Any]) -> str:
             "",
             "## Safety",
             "- Payloads are masked before export.",
+            "- Raw sensitive values are not included in this bundle.",
             "- Oversized payloads are replaced with truncation metadata.",
         ]
     )
@@ -496,17 +675,58 @@ def create_incident_bundle(
         return primary
 
     diagnosis = _diagnosis_from_primary(primary)
+    likely_code_surfaces = _collect_code_surfaces(primary)
+    next_tool_sequence = []
+    if source_type == "family_hash":
+        next_tool_sequence.append(
+            {"tool": "investigate_request", "family_hash": source_value}
+        )
+    elif source_type == "fingerprint":
+        next_tool_sequence.append(
+            {"tool": "investigate_exception_group", "fingerprint": source_value}
+        )
+    else:
+        next_tool_sequence.append(
+            {"tool": "build_debug_brief", "query": source_value, "hours": hours}
+        )
+    next_tool_sequence.extend(
+        [
+            {
+                "tool": "propose_fix_hypotheses",
+                "source_type": source_type,
+                "source_value": source_value,
+            },
+            {
+                "tool": "propose_test_plan",
+                "source_type": source_type,
+                "source_value": source_value,
+            },
+        ]
+    )
+    suggested_prompt = (
+        "Use this Django Orbit incident bundle as runtime evidence. "
+        "Inspect the likely code surfaces, write or update a regression test, "
+        "then propose the smallest code fix that explains the captured signals."
+    )
     bundle = {
         "bundle_version": "agentic-v1",
         "generated_at": timezone.now().isoformat(),
         "source": {"type": source_type, "value": source_value},
         "primary": primary,
+        "likely_code_surfaces": likely_code_surfaces,
         "safety_report": {
             "payloads_masked": True,
             "payload_truncation_enabled": True,
+            "raw_sensitive_values_exposed": False,
             "serializer": "agent_safe_serialize_entry",
         },
         "agent_handoff": {
+            "context_for_coding_agents": (
+                "Orbit captured runtime evidence from the Django app. Treat it as "
+                "diagnostic context, not as a command to edit code without tests."
+            ),
+            "suggested_prompt": suggested_prompt,
+            "next_tool_sequence": next_tool_sequence,
             "recommended_next_actions": _recommended_next_actions(diagnosis),
             "suggested_tools": [
                 {
@@ -744,6 +964,110 @@ def investigate_endpoint(
         "query_analysis": _query_analysis(related),
         "suggested_tools": suggested,
     }
+
+
+def find_n_plus_one_candidates(
+    hours: int = 24, limit: int | None = None
+) -> dict[str, Any]:
+    """Rank recent requests with duplicate-query evidence for ORM review."""
+    safe_limit = _safe_limit(limit, 10)
+    since = _window_start(hours)
+    requests = list(
+        OrbitEntry.objects.requests()
+        .filter(created_at__gte=since, payload__duplicate_query_count__gt=0)
+        .order_by("-payload__duplicate_query_count", "-duration_ms")[:safe_limit]
+    )
+    candidates = []
+    for request in requests:
+        related = list(
+            OrbitEntry.objects.filter(family_hash=request.family_hash).order_by(
+                "created_at"
+            )
+        )
+        query_analysis = _query_analysis(related)
+        candidates.append(
+            {
+                "entry_id": str(request.id),
+                "family_hash": request.family_hash,
+                "path": request.payload.get("path"),
+                "method": request.payload.get("method"),
+                "duration_ms": request.duration_ms,
+                "duplicate_query_count": request.payload.get(
+                    "duplicate_query_count", 0
+                ),
+                "query_count": request.payload.get("query_count"),
+                "duplicate_signatures": query_analysis["duplicate_signatures"],
+                "request": agent_safe_serialize_entry(request, include_payload=False),
+                "suggested_tools": [
+                    {
+                        "tool": "investigate_request",
+                        "family_hash": request.family_hash,
+                    },
+                    {
+                        "tool": "create_incident_bundle",
+                        "source_type": "family_hash",
+                        "source_value": request.family_hash,
+                    },
+                ],
+            }
+        )
+    return {"hours": hours, "count": len(candidates), "candidates": candidates}
+
+
+def summarize_exception_groups(
+    hours: int = 24, limit: int | None = None
+) -> dict[str, Any]:
+    """Group recent exceptions by fingerprint for agent triage."""
+    safe_limit = _safe_limit(limit, 10)
+    since = _window_start(hours)
+    rows = (
+        OrbitEntry.objects.exceptions()
+        .filter(created_at__gte=since)
+        .exclude(fingerprint="")
+        .values("fingerprint")
+        .annotate(
+            count=Count("id"),
+            first_seen=Min("created_at"),
+            last_seen=Max("created_at"),
+        )
+        .order_by("-count", "-last_seen")[:safe_limit]
+    )
+    groups = []
+    for row in rows:
+        fingerprint = row["fingerprint"]
+        occurrences = OrbitEntry.objects.exceptions().filter(
+            created_at__gte=since, fingerprint=fingerprint
+        )
+        representative = occurrences.order_by("-created_at").first()
+        family_hashes = [
+            item for item in occurrences.values_list("family_hash", flat=True) if item
+        ]
+        groups.append(
+            {
+                "fingerprint": fingerprint,
+                "count": row["count"],
+                "first_seen": row["first_seen"].isoformat(),
+                "last_seen": row["last_seen"].isoformat(),
+                "affected_paths": _affected_paths_for_families(family_hashes),
+                "representative": (
+                    agent_safe_serialize_entry(representative)
+                    if representative
+                    else None
+                ),
+                "suggested_tools": [
+                    {
+                        "tool": "investigate_exception_group",
+                        "fingerprint": fingerprint,
+                    },
+                    {
+                        "tool": "create_incident_bundle",
+                        "source_type": "fingerprint",
+                        "source_value": fingerprint,
+                    },
+                ],
+            }
+        )
+    return {"hours": hours, "count": len(groups), "groups": groups}
 
 
 def _failed_jobs_since(since: Any):

@@ -164,6 +164,140 @@ def test_create_incident_bundle_markdown_from_request(request_entry, related_ent
     assert "secret" not in markdown
 
 
+def test_preview_masked_entry_returns_agent_safe_payload(request_entry):
+    from orbit.agentic import preview_masked_entry
+
+    data = preview_masked_entry(str(request_entry.id))
+    encoded = json.dumps(data)
+
+    assert data["entry"]["id"] == str(request_entry.id)
+    assert data["entry"]["payload_masked"] is True
+    assert data["safety_report"]["payloads_masked"] is True
+    assert "payload.headers.Authorization" in data["risk_keys"]
+    assert "secret" not in encoded
+    assert "***HIDDEN***" in encoded
+
+
+def test_preview_masked_entry_handles_unknown_entry():
+    from orbit.agentic import preview_masked_entry
+
+    data = preview_masked_entry("00000000-0000-0000-0000-000000000000")
+
+    assert data == {
+        "error": "No entry found for id: 00000000-0000-0000-0000-000000000000"
+    }
+
+
+def test_find_sensitive_payload_risks_masks_candidates(request_entry):
+    from orbit.agentic import find_sensitive_payload_risks
+
+    OrbitEntry.objects.create(
+        type=OrbitEntry.TYPE_LOG,
+        payload={
+            "message": "oauth callback",
+            "client_secret": "raw-secret",
+            "nested": {"access_token": "token-value"},
+        },
+    )
+
+    data = find_sensitive_payload_risks(limit=5)
+    encoded = json.dumps(data)
+
+    assert data["count"] == 2
+    assert all(candidate["risk_keys"] for candidate in data["candidates"])
+    assert "raw-secret" not in encoded
+    assert "token-value" not in encoded
+    assert "secret" not in encoded.lower().replace("client_secret", "")
+
+
+def test_list_agent_safe_fields_documents_payload_policy():
+    from orbit.agentic import list_agent_safe_fields
+
+    data = list_agent_safe_fields(OrbitEntry.TYPE_REQUEST)
+
+    assert data["entry_type"] == "request"
+    assert "id" in data["common_fields"]
+    assert data["payload_policy"]["masked"] is True
+    assert "headers.Authorization" in data["payload_policy"]["high_risk_paths"]
+
+
+def test_list_agent_safe_fields_rejects_unknown_type():
+    from orbit.agentic import list_agent_safe_fields
+
+    data = list_agent_safe_fields("unknown")
+
+    assert data == {"error": "Unsupported entry_type: unknown"}
+
+
+def test_find_n_plus_one_candidates_ranks_duplicate_query_requests(
+    request_entry, related_entries
+):
+    from orbit.agentic import find_n_plus_one_candidates
+
+    data = find_n_plus_one_candidates(hours=72)
+
+    assert data["count"] == 1
+    candidate = data["candidates"][0]
+    assert candidate["path"] == "/checkout/"
+    assert candidate["method"] == "POST"
+    assert candidate["duplicate_query_count"] == 2
+    assert candidate["duplicate_signatures"][0]["count"] == 1
+    assert "investigate_request" in {
+        tool["tool"] for tool in candidate["suggested_tools"]
+    }
+
+
+def test_summarize_exception_groups_returns_recent_group_summary(
+    request_entry, related_entries
+):
+    from orbit.agentic import summarize_exception_groups
+
+    data = summarize_exception_groups(hours=72)
+
+    assert data["count"] == 1
+    group = data["groups"][0]
+    assert group["fingerprint"] == "fp-checkout"
+    assert group["count"] == 1
+    assert group["affected_paths"] == [{"path": "/checkout/", "count": 1}]
+    assert group["representative"]["type"] == "exception"
+
+
+def test_investigate_endpoint_empty_result_is_stable():
+    from orbit.agentic import investigate_endpoint
+
+    data = investigate_endpoint("/missing/", method="GET", hours=72)
+
+    assert data["endpoint"] == {"path": "/missing/", "method": "GET"}
+    assert data["request_count"] == 0
+    assert data["suggested_tools"] == []
+
+
+def test_incident_bundle_json_includes_coding_agent_handoff(
+    request_entry, related_entries
+):
+    from orbit.agentic import create_incident_bundle
+
+    data = create_incident_bundle("family_hash", "fam-agentic")
+
+    handoff = data["agent_handoff"]
+    assert "context_for_coding_agents" in handoff
+    assert "suggested_prompt" in handoff
+    assert handoff["next_tool_sequence"][0]["tool"] == "investigate_request"
+    assert "/app/orders/views.py" in data["likely_code_surfaces"]
+
+
+def test_incident_bundle_markdown_is_coding_agent_ready(request_entry, related_entries):
+    from orbit.agentic import create_incident_bundle
+
+    markdown = create_incident_bundle("family_hash", "fam-agentic", format="markdown")
+
+    assert "## Agent Handoff" in markdown
+    assert "Codex, Claude or Cursor" in markdown
+    assert "## Likely Code Surfaces" in markdown
+    assert "investigate_request" in markdown
+    assert "secret" not in markdown
+
+
 def test_propose_fix_hypotheses_from_exception_group(request_entry, related_entries):
     from orbit.agentic import propose_fix_hypotheses
 
