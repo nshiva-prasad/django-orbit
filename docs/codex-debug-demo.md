@@ -1,6 +1,6 @@
-# Debug Django With Codex Using Orbit Context
+# Debug Django With Codex And Claude Using Orbit Context
 
-This workflow shows how to move from a ticket, error report or failing endpoint to a useful Codex investigation using Orbit MCP context.
+This workflow shows how to move from a ticket, error report or failing endpoint to a useful Codex, Claude or Cursor investigation using Orbit MCP context.
 
 ## 1. Run Orbit Locally
 
@@ -12,7 +12,7 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-Configure the MCP server in your coding assistant:
+Configure the MCP server in your coding assistant. Claude Desktop, Cursor and most MCP-compatible clients use the same server shape:
 
 ```json
 {
@@ -25,6 +25,13 @@ Configure the MCP server in your coding assistant:
   }
 }
 ```
+
+For Claude Desktop specifically, place the same block inside `claude_desktop_config.json`:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+For Claude Code or Codex CLI, configure the equivalent local MCP server entry for the project, pointing `command` to `python`, `args` to `["manage.py", "orbit_mcp"]`, and `cwd` to the Django project root.
 
 Keep the MCP exposure explicit in Django settings:
 
@@ -39,7 +46,7 @@ ORBIT_CONFIG = {
 
 ## 2. Verify Agent Safety
 
-Before asking Codex to inspect runtime context, ask it to verify the exposure policy:
+Before asking Codex, Claude or Cursor to inspect runtime context, ask it to verify the exposure policy:
 
 ```text
 audit_mcp_exposure()
@@ -57,14 +64,14 @@ Orbit masks sensitive keys before output and reports payload truncation when evi
 
 ## 3. Start From The Ticket Or Error
 
-Give Codex the human symptom first:
+Give the coding agent the human symptom first. This prompt works in Codex, Claude or Cursor:
 
 ```text
 Use Django Orbit context to investigate: checkout returns 500 after payment token rejection.
 Start by finding matching runtime evidence. Do not edit code until you have a regression-test plan.
 ```
 
-Codex should call:
+The assistant should call:
 
 ```text
 build_debug_brief("checkout returns 500 after payment token rejection")
@@ -103,7 +110,7 @@ create_incident_bundle("family_hash", "<family_hash>", format="json")
 
 ## 5. Move From Evidence To Fix Hypothesis
 
-Ask Codex to turn the bundle into a plan:
+Ask the assistant to turn the bundle into a plan:
 
 ```text
 Using the Orbit incident bundle, inspect the likely code surfaces, write a failing regression test first, and propose the smallest code fix that explains the captured signals.
@@ -116,7 +123,7 @@ propose_fix_hypotheses("fingerprint", "<fingerprint>")
 propose_test_plan("family_hash", "<family_hash>")
 ```
 
-A good Codex handoff should produce:
+A good coding-agent handoff should produce:
 
 - the exact runtime symptom being fixed;
 - a failing test target;
