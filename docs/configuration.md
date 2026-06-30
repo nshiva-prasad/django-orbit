@@ -249,8 +249,9 @@ ORBIT_CONFIG = {
 - **Type**: `bool`
 - **Default**: `False`
 - **Description**: Use `EXPLAIN ANALYZE`, which **executes** the statement to gather real
-  timings. Only ever applied to read-only `SELECT`s and wrapped in a rolled-back savepoint.
-  Leave off unless you understand the implications.
+  timings. Only applied to plain `SELECT` statements, wrapped in a rollback scope, and
+  guarded with a PostgreSQL read-only transaction when available. Leave off unless you
+  understand the implications.
 
 #### `MAX_BODY_SIZE`
 - **Type**: `int`
@@ -299,6 +300,8 @@ When `False`, watcher failures will surface as exceptions. Useful during develop
 - **Type**: `bool`
 - **Default**: `True`
 - **Description**: Includes masked entry payloads in MCP responses. Set to `False` for metadata-only agent access.
+
+For shared, staging or sensitive environments, the conservative MCP posture is `MCP_ENABLED: False`. If MCP is needed but payload bodies are not, use `MCP_INCLUDE_PAYLOADS: False` to expose metadata without entry payloads.
 
 #### `MCP_MAX_LIMIT`
 - **Type**: `int`

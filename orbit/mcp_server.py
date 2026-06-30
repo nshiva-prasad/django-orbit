@@ -36,10 +36,12 @@ def _format_output(data: Any) -> str:
 
 def _mcp_disabled_output() -> str:
     """Return a stable response when MCP data exposure is disabled."""
-    return _format_output({
-        "error": "MCP data exposure is disabled by ORBIT_CONFIG['MCP_ENABLED'].",
-        "disabled": True,
-    })
+    return _format_output(
+        {
+            "error": "MCP data exposure is disabled by ORBIT_CONFIG['MCP_ENABLED'].",
+            "disabled": True,
+        }
+    )
 
 
 def create_mcp_server():
@@ -126,11 +128,13 @@ def create_mcp_server():
             .order_by("-duration_ms")[:limit]
         )
         result = [_serialize_entry(e) for e in entries]
-        return _format_output({
-            "threshold_ms": threshold,
-            "count": len(result),
-            "slow_queries": result,
-        })
+        return _format_output(
+            {
+                "threshold_ms": threshold,
+                "count": len(result),
+                "slow_queries": result,
+            }
+        )
 
     # -------------------------------------------------------------------------
     # Tool: get_exceptions
@@ -162,7 +166,9 @@ def create_mcp_server():
             .order_by("-created_at")[:limit]
         )
         result = [_serialize_entry(e) for e in entries]
-        return _format_output({"hours": hours, "count": len(result), "exceptions": result})
+        return _format_output(
+            {"hours": hours, "count": len(result), "exceptions": result}
+        )
 
     # -------------------------------------------------------------------------
     # Tool: get_n1_patterns
@@ -172,7 +178,7 @@ def create_mcp_server():
         """
         Find HTTP requests that triggered N+1 query patterns.
 
-        Returns requests where duplicate SQL queries were detected — a strong
+        Returns requests where duplicate SQL queries were detected â€” a strong
         signal of missing select_related() or prefetch_related() calls.
         Each result includes the most-duplicated query and its repetition count.
 
@@ -193,15 +199,19 @@ def create_mcp_server():
 
         results = []
         for entry in entries:
-            results.append({
-                "id": str(entry.id),
-                "path": entry.payload.get("path"),
-                "method": entry.payload.get("method"),
-                "duration_ms": entry.duration_ms,
-                "duplicate_query_count": entry.payload.get("duplicate_query_count", 0),
-                "family_hash": entry.family_hash,
-                "created_at": entry.created_at.isoformat(),
-            })
+            results.append(
+                {
+                    "id": str(entry.id),
+                    "path": entry.payload.get("path"),
+                    "method": entry.payload.get("method"),
+                    "duration_ms": entry.duration_ms,
+                    "duplicate_query_count": entry.payload.get(
+                        "duplicate_query_count", 0
+                    ),
+                    "family_hash": entry.family_hash,
+                    "created_at": entry.created_at.isoformat(),
+                }
+            )
 
         return _format_output({"count": len(results), "n1_patterns": results})
 
@@ -218,7 +228,7 @@ def create_mcp_server():
 
         Args:
             query: Search string to look for in entry payloads
-            entry_type: Optional filter — one of: request, query, log, exception,
+            entry_type: Optional filter â€” one of: request, query, log, exception,
                         command, cache, model, http_client, mail, signal, redis,
                         gate, transaction, storage, job
             limit: Number of results to return (max 100, default 20)
@@ -233,19 +243,20 @@ def create_mcp_server():
             qs = qs.filter(type=entry_type)
 
         # Search in summary (computed) via payload JSON fields
-        # Use icontains on the payload cast — works on SQLite and PostgreSQL
+        # Use icontains on the payload cast â€” works on SQLite and PostgreSQL
         from django.db.models import Q
-        qs = qs.filter(
-            Q(payload__icontains=query)
-        ).order_by("-created_at")[:limit]
+
+        qs = qs.filter(Q(payload__icontains=query)).order_by("-created_at")[:limit]
 
         result = [_serialize_entry(e) for e in qs]
-        return _format_output({
-            "query": query,
-            "entry_type": entry_type,
-            "count": len(result),
-            "entries": result,
-        })
+        return _format_output(
+            {
+                "query": query,
+                "entry_type": entry_type,
+                "count": len(result),
+                "entries": result,
+            }
+        )
 
     # -------------------------------------------------------------------------
     # Tool: get_request_detail
@@ -267,7 +278,9 @@ def create_mcp_server():
 
         entries = OrbitEntry.objects.for_family(family_hash)
         if not entries.exists():
-            return _format_output({"error": f"No entries found for family_hash: {family_hash}"})
+            return _format_output(
+                {"error": f"No entries found for family_hash: {family_hash}"}
+            )
 
         result = [_serialize_entry(e) for e in entries]
 
@@ -276,12 +289,14 @@ def create_mcp_server():
         for e in result:
             by_type.setdefault(e["type"], []).append(e)
 
-        return _format_output({
-            "family_hash": family_hash,
-            "total_events": len(result),
-            "event_types": {k: len(v) for k, v in by_type.items()},
-            "events": result,
-        })
+        return _format_output(
+            {
+                "family_hash": family_hash,
+                "total_events": len(result),
+                "event_types": {k: len(v) for k, v in by_type.items()},
+                "events": result,
+            }
+        )
 
     # -------------------------------------------------------------------------
     # Tool: get_stats_summary
@@ -329,7 +344,9 @@ def create_mcp_server():
         cache_ops = base.filter(type=OrbitEntry.TYPE_CACHE)
         total_cache = cache_ops.count()
         cache_hits = cache_ops.filter(payload__hit=True).count()
-        cache_hit_rate = round(cache_hits / total_cache * 100, 1) if total_cache else None
+        cache_hit_rate = (
+            round(cache_hits / total_cache * 100, 1) if total_cache else None
+        )
 
         # Top error paths
         top_errors = (
@@ -339,27 +356,32 @@ def create_mcp_server():
             .order_by("-count")[:5]
         )
 
-        return _format_output({
-            "period_hours": hours,
-            "requests": {
-                "total": total_requests,
-                "errors": error_requests,
-                "error_rate_pct": round(error_requests / total_requests * 100, 1) if total_requests else 0,
-                "avg_duration_ms": round(avg_duration, 1) if avg_duration else None,
-            },
-            "queries": {
-                "total": total_queries,
-                "slow": slow_queries,
-                "slow_threshold_ms": slow_threshold,
-            },
-            "exceptions": {"total": total_exceptions},
-            "cache": {
-                "total_ops": total_cache,
-                "hit_rate_pct": cache_hit_rate,
-            },
-            "top_error_paths": list(top_errors),
-        })
-
+        return _format_output(
+            {
+                "period_hours": hours,
+                "requests": {
+                    "total": total_requests,
+                    "errors": error_requests,
+                    "error_rate_pct": (
+                        round(error_requests / total_requests * 100, 1)
+                        if total_requests
+                        else 0
+                    ),
+                    "avg_duration_ms": round(avg_duration, 1) if avg_duration else None,
+                },
+                "queries": {
+                    "total": total_queries,
+                    "slow": slow_queries,
+                    "slow_threshold_ms": slow_threshold,
+                },
+                "exceptions": {"total": total_exceptions},
+                "cache": {
+                    "total_ops": total_cache,
+                    "hit_rate_pct": cache_hit_rate,
+                },
+                "top_error_paths": list(top_errors),
+            }
+        )
 
     # -------------------------------------------------------------------------
     # High-level agentic tools
@@ -379,6 +401,42 @@ def create_mcp_server():
         return _format_output(agentic_tools.audit_mcp_exposure())
 
     @mcp.tool()
+    def preview_masked_entry(entry_id: str) -> str:
+        """
+        Preview one Orbit entry exactly as an agent will receive it.
+
+        The response includes masked payload data, safe-field policy and detected
+        sensitive-looking payload paths without exposing raw sensitive values.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(agentic_tools.preview_masked_entry(entry_id))
+
+    @mcp.tool()
+    def find_sensitive_payload_risks(limit: int = 20) -> str:
+        """
+        Find recent entries whose payload keys look sensitive.
+
+        Use this to audit whether request/log/exception payload shapes include
+        secrets, tokens, credentials or authorization data before sharing context.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(agentic_tools.find_sensitive_payload_risks(limit=limit))
+
+    @mcp.tool()
+    def list_agent_safe_fields(entry_type: str) -> str:
+        """
+        List the fields and payload policy exposed to AI coding agents.
+
+        entry_type must be one Orbit entry type such as request, query, log or
+        exception.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(agentic_tools.list_agent_safe_fields(entry_type))
+
+    @mcp.tool()
     def investigate_request(family_hash: str, limit: int = None) -> str:
         """
         Build a high-level diagnosis for one request family.
@@ -388,7 +446,9 @@ def create_mcp_server():
         """
         if not get_config().get("MCP_ENABLED", True):
             return _mcp_disabled_output()
-        return _format_output(agentic_tools.investigate_request(family_hash, limit=limit))
+        return _format_output(
+            agentic_tools.investigate_request(family_hash, limit=limit)
+        )
 
     @mcp.tool()
     def investigate_exception_group(fingerprint: str, limit: int = None) -> str:
@@ -400,10 +460,14 @@ def create_mcp_server():
         """
         if not get_config().get("MCP_ENABLED", True):
             return _mcp_disabled_output()
-        return _format_output(agentic_tools.investigate_exception_group(fingerprint, limit=limit))
+        return _format_output(
+            agentic_tools.investigate_exception_group(fingerprint, limit=limit)
+        )
 
     @mcp.tool()
-    def create_incident_bundle(source_type: str, source_value: str, hours: int = 72, format: str = "json") -> str:
+    def create_incident_bundle(
+        source_type: str, source_value: str, hours: int = 72, format: str = "json"
+    ) -> str:
         """
         Create an on-demand agent handoff bundle.
 
@@ -412,7 +476,9 @@ def create_mcp_server():
         """
         if not get_config().get("MCP_ENABLED", True):
             return _mcp_disabled_output()
-        result = agentic_tools.create_incident_bundle(source_type, source_value, hours=hours, format=format)
+        result = agentic_tools.create_incident_bundle(
+            source_type, source_value, hours=hours, format=format
+        )
         if isinstance(result, str):
             return result
         return _format_output(result)
@@ -427,10 +493,132 @@ def create_mcp_server():
         """
         if not get_config().get("MCP_ENABLED", True):
             return _mcp_disabled_output()
-        return _format_output(agentic_tools.build_debug_brief(query, hours=hours, limit=limit))
+        return _format_output(
+            agentic_tools.build_debug_brief(query, hours=hours, limit=limit)
+        )
 
     @mcp.tool()
-    def propose_fix_hypotheses(source_type: str, source_value: str, hours: int = 72) -> str:
+    def investigate_endpoint(
+        path: str, method: str = None, hours: int = 24, limit: int = None
+    ) -> str:
+        """
+        Summarize health for one endpoint across recent traffic.
+
+        Returns request count, error rate, slowest requests, query analysis,
+        top exception groups and suggested next tools.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(
+            agentic_tools.investigate_endpoint(
+                path, method=method, hours=hours, limit=limit
+            )
+        )
+
+    @mcp.tool()
+    def compare_endpoint_windows(
+        path: str,
+        method: str = None,
+        baseline_hours: int = 24,
+        current_hours: int = 2,
+    ) -> str:
+        """
+        Compare a recent endpoint window against the preceding baseline.
+
+        Use this to determine whether an endpoint is regressing, stable,
+        improving or needs more data before debugging/release decisions.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(
+            agentic_tools.compare_endpoint_windows(
+                path,
+                method=method,
+                baseline_hours=baseline_hours,
+                current_hours=current_hours,
+            )
+        )
+
+    @mcp.tool()
+    def find_n_plus_one_candidates(hours: int = 24, limit: int = None) -> str:
+        """
+        Rank recent requests that show duplicate-query/N+1 evidence.
+
+        Returns endpoint, family_hash, duplicate signatures and suggested next
+        tools for each candidate.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(
+            agentic_tools.find_n_plus_one_candidates(hours=hours, limit=limit)
+        )
+
+    @mcp.tool()
+    def summarize_exception_groups(hours: int = 24, limit: int = None) -> str:
+        """
+        Summarize recent exception fingerprints for agent triage.
+
+        Returns grouped counts, first/last seen, affected paths, representatives
+        and suggested next tools.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(
+            agentic_tools.summarize_exception_groups(hours=hours, limit=limit)
+        )
+
+    @mcp.tool()
+    def daily_health_brief(hours: int = 24, limit: int = None) -> str:
+        """
+        Generate a local daily debugging brief.
+
+        Returns top exceptions, failed jobs, slow queries, warning logs and
+        suggested next actions for human/agent triage.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(
+            agentic_tools.daily_health_brief(hours=hours, limit=limit)
+        )
+
+    @mcp.tool()
+    def generate_release_risk_brief(hours: int = 24, limit: int = None) -> str:
+        """
+        Generate a release risk brief from recent Orbit runtime signals.
+
+        Returns blocker/caution signals such as exceptions, error requests,
+        failed jobs and slow queries.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        return _format_output(
+            agentic_tools.generate_release_risk_brief(hours=hours, limit=limit)
+        )
+
+    @mcp.tool()
+    def generate_pr_context(
+        source_type: str, source_value: str, hours: int = 72, format: str = "json"
+    ) -> str:
+        """
+        Generate PR-ready context from Orbit runtime evidence.
+
+        Returns a suggested PR title, evidence summary, likely code surfaces,
+        fix hypotheses, suggested tests and release-risk notes. Use
+        format="markdown" for a paste-ready PR section.
+        """
+        if not get_config().get("MCP_ENABLED", True):
+            return _mcp_disabled_output()
+        result = agentic_tools.generate_pr_context(
+            source_type, source_value, hours=hours, format=format
+        )
+        if isinstance(result, str):
+            return result
+        return _format_output(result)
+
+    @mcp.tool()
+    def propose_fix_hypotheses(
+        source_type: str, source_value: str, hours: int = 72
+    ) -> str:
         """
         Rank likely fix directions from Orbit evidence without editing code.
 
@@ -438,7 +626,9 @@ def create_mcp_server():
         """
         if not get_config().get("MCP_ENABLED", True):
             return _mcp_disabled_output()
-        return _format_output(agentic_tools.propose_fix_hypotheses(source_type, source_value, hours=hours))
+        return _format_output(
+            agentic_tools.propose_fix_hypotheses(source_type, source_value, hours=hours)
+        )
 
     @mcp.tool()
     def propose_test_plan(source_type: str, source_value: str, hours: int = 72) -> str:
@@ -449,5 +639,8 @@ def create_mcp_server():
         """
         if not get_config().get("MCP_ENABLED", True):
             return _mcp_disabled_output()
-        return _format_output(agentic_tools.propose_test_plan(source_type, source_value, hours=hours))
+        return _format_output(
+            agentic_tools.propose_test_plan(source_type, source_value, hours=hours)
+        )
+
     return mcp

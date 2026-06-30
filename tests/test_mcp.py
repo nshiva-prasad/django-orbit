@@ -3,7 +3,7 @@ Tests for the Django Orbit MCP server.
 
 These tests verify that each MCP tool returns valid JSON and handles
 edge cases gracefully (empty database, invalid inputs, etc.).
-The actual MCP transport is not tested here — only the tool logic.
+The actual MCP transport is not tested here â€” only the tool logic.
 """
 
 import json
@@ -11,14 +11,15 @@ import pytest
 from django.test import override_settings
 from orbit.models import OrbitEntry
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_server():
     """Instantiate the MCP server (requires Django ORM to be ready)."""
     from orbit.mcp_server import create_mcp_server
+
     return create_mcp_server()
 
 
@@ -30,7 +31,7 @@ def _get_tool(mcp, name):
         tool = manager._tools.get(name)
         if tool:
             return tool.fn
-    # Fallback: tools are functions in the closure — access via the server's tool list
+    # Fallback: tools are functions in the closure â€” access via the server's tool list
     raise KeyError(f"Tool '{name}' not found in MCP server")
 
 
@@ -44,6 +45,7 @@ def _call_tool(mcp, name, **kwargs):
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mcp_server():
@@ -71,7 +73,11 @@ def sample_slow_query(db, sample_request):
         type=OrbitEntry.TYPE_QUERY,
         family_hash="abc123",
         duration_ms=1200.0,
-        payload={"sql": "SELECT * FROM products", "is_slow": True, "is_duplicate": False},
+        payload={
+            "sql": "SELECT * FROM products",
+            "is_slow": True,
+            "is_duplicate": False,
+        },
     )
 
 
@@ -107,10 +113,12 @@ def sample_n1_request(db):
 # Import guard
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_mcp_import_error_without_package(monkeypatch):
     """create_mcp_server() raises ImportError when 'mcp' is not installed."""
     import sys
+
     # Temporarily hide the mcp package
     original = sys.modules.get("mcp")
     sys.modules["mcp"] = None  # type: ignore[assignment]
@@ -118,6 +126,7 @@ def test_mcp_import_error_without_package(monkeypatch):
         # Force reimport
         import importlib
         import orbit.mcp_server as mod
+
         importlib.reload(mod)
         with pytest.raises(ImportError, match="pip install django-orbit"):
             mod.create_mcp_server()
@@ -126,7 +135,6 @@ def test_mcp_import_error_without_package(monkeypatch):
             sys.modules.pop("mcp", None)
         else:
             sys.modules["mcp"] = original
-
 
 
 @pytest.mark.django_db
@@ -147,12 +155,34 @@ def test_mcp_enabled_false_blocks_all_tools(db):
         ("get_request_detail", {"family_hash": "blocked"}),
         ("get_stats_summary", {}),
         ("audit_mcp_exposure", {}),
+        ("preview_masked_entry", {"entry_id": "00000000-0000-0000-0000-000000000000"}),
+        ("find_sensitive_payload_risks", {}),
+        ("list_agent_safe_fields", {"entry_type": "request"}),
         ("investigate_request", {"family_hash": "blocked"}),
         ("investigate_exception_group", {"fingerprint": "fp"}),
-        ("create_incident_bundle", {"source_type": "family_hash", "source_value": "blocked"}),
+        (
+            "create_incident_bundle",
+            {"source_type": "family_hash", "source_value": "blocked"},
+        ),
         ("build_debug_brief", {"query": "private"}),
-        ("propose_fix_hypotheses", {"source_type": "family_hash", "source_value": "blocked"}),
-        ("propose_test_plan", {"source_type": "family_hash", "source_value": "blocked"}),
+        ("investigate_endpoint", {"path": "/private/"}),
+        ("compare_endpoint_windows", {"path": "/private/"}),
+        ("find_n_plus_one_candidates", {}),
+        ("summarize_exception_groups", {}),
+        ("daily_health_brief", {}),
+        ("generate_release_risk_brief", {}),
+        (
+            "generate_pr_context",
+            {"source_type": "family_hash", "source_value": "blocked"},
+        ),
+        (
+            "propose_fix_hypotheses",
+            {"source_type": "family_hash", "source_value": "blocked"},
+        ),
+        (
+            "propose_test_plan",
+            {"source_type": "family_hash", "source_value": "blocked"},
+        ),
     ]
 
     for name, kwargs in calls:
@@ -163,9 +193,109 @@ def test_mcp_enabled_false_blocks_all_tools(db):
         }
 
 
+@pytest.mark.django_db
+def test_agentic_security_tools_are_available_via_mcp(mcp_server, sample_request):
+    sample_request.payload["headers"] = {"Authorization": "Bearer hidden-token"}
+    sample_request.payload["body"] = {"password": "hidden-password"}
+    sample_request.save(update_fields=["payload"])
+
+    preview = _call_tool(
+        mcp_server, "preview_masked_entry", entry_id=str(sample_request.id)
+    )
+    risks = _call_tool(mcp_server, "find_sensitive_payload_risks", limit=5)
+    fields = _call_tool(mcp_server, "list_agent_safe_fields", entry_type="request")
+    encoded = json.dumps({"preview": preview, "risks": risks})
+
+    assert preview["entry"]["id"] == str(sample_request.id)
+    assert "hidden-token" not in encoded
+    assert "hidden-password" not in encoded
+    assert risks["count"] == 1
+    assert fields["payload_policy"]["masked"] is True
+
+
+@pytest.mark.django_db
+def test_agentic_investigation_tools_are_available_via_mcp(mcp_server, sample_request):
+    sample_request.payload["duplicate_query_count"] = 2
+    sample_request.save(update_fields=["payload"])
+    OrbitEntry.objects.create(
+        type=OrbitEntry.TYPE_QUERY,
+        family_hash=sample_request.family_hash,
+        duration_ms=20.0,
+        payload={"sql": "SELECT * FROM products", "is_duplicate": True},
+    )
+    OrbitEntry.objects.create(
+        type=OrbitEntry.TYPE_EXCEPTION,
+        family_hash=sample_request.family_hash,
+        fingerprint="fp-products",
+        payload={"exception_type": "ValueError", "message": "bad product"},
+    )
+
+    n1 = _call_tool(mcp_server, "find_n_plus_one_candidates", hours=72)
+    groups = _call_tool(mcp_server, "summarize_exception_groups", hours=72)
+
+    assert n1["count"] == 1
+    assert n1["candidates"][0]["family_hash"] == sample_request.family_hash
+    assert groups["groups"][0]["fingerprint"] == "fp-products"
+
+
+@pytest.mark.django_db
+def test_generate_pr_context_is_available_via_mcp(mcp_server, sample_request):
+    OrbitEntry.objects.create(
+        type=OrbitEntry.TYPE_EXCEPTION,
+        family_hash=sample_request.family_hash,
+        fingerprint="fp-products",
+        payload={"exception_type": "ValueError", "message": "bad product"},
+    )
+
+    data = _call_tool(
+        mcp_server,
+        "generate_pr_context",
+        source_type="family_hash",
+        source_value=sample_request.family_hash,
+        hours=72,
+    )
+    markdown = _get_tool(mcp_server, "generate_pr_context")(
+        source_type="family_hash",
+        source_value=sample_request.family_hash,
+        hours=72,
+        format="markdown",
+    )
+
+    assert data["source"] == {
+        "type": "family_hash",
+        "value": sample_request.family_hash,
+    }
+    assert "pr_body_markdown" in data
+    assert markdown.startswith("## Orbit Evidence")
+
+
+@pytest.mark.django_db
+def test_compare_endpoint_windows_and_prompt_bundle_are_available_via_mcp(
+    mcp_server, sample_request
+):
+    prompt = _get_tool(mcp_server, "create_incident_bundle")(
+        source_type="family_hash",
+        source_value=sample_request.family_hash,
+        format="prompt",
+    )
+    comparison = _call_tool(
+        mcp_server,
+        "compare_endpoint_windows",
+        path="/api/products/",
+        method="GET",
+        baseline_hours=24,
+        current_hours=2,
+    )
+
+    assert prompt.startswith("You are debugging a Django issue")
+    assert comparison["endpoint"] == {"path": "/api/products/", "method": "GET"}
+    assert comparison["classification"] in {"stable", "insufficient_data"}
+
+
 # ---------------------------------------------------------------------------
 # Tool: get_recent_requests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_get_recent_requests_empty(mcp_server):
@@ -199,6 +329,7 @@ def test_get_recent_requests_limit_capped(mcp_server, db):
 # Tool: get_slow_queries
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_get_slow_queries_empty(mcp_server):
     data = _call_tool(mcp_server, "get_slow_queries")
@@ -214,7 +345,7 @@ def test_get_slow_queries_finds_slow(mcp_server, sample_slow_query):
 
 @pytest.mark.django_db
 def test_get_slow_queries_threshold_filters(mcp_server, sample_slow_query):
-    # Threshold above the query's duration — should return nothing
+    # Threshold above the query's duration â€” should return nothing
     data = _call_tool(mcp_server, "get_slow_queries", threshold_ms=2000)
     assert data["count"] == 0
 
@@ -222,6 +353,7 @@ def test_get_slow_queries_threshold_filters(mcp_server, sample_slow_query):
 # ---------------------------------------------------------------------------
 # Tool: get_exceptions
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_get_exceptions_empty(mcp_server):
@@ -240,6 +372,7 @@ def test_get_exceptions_returns_entries(mcp_server, sample_exception):
 # Tool: get_n1_patterns
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_get_n1_patterns_empty(mcp_server):
     data = _call_tool(mcp_server, "get_n1_patterns")
@@ -256,7 +389,7 @@ def test_get_n1_patterns_finds_duplicates(mcp_server, sample_n1_request):
 
 @pytest.mark.django_db
 def test_get_n1_patterns_excludes_clean_requests(mcp_server, sample_request):
-    # sample_request has duplicate_query_count=0 — should not appear
+    # sample_request has duplicate_query_count=0 â€” should not appear
     data = _call_tool(mcp_server, "get_n1_patterns")
     assert data["count"] == 0
 
@@ -264,6 +397,7 @@ def test_get_n1_patterns_excludes_clean_requests(mcp_server, sample_request):
 # ---------------------------------------------------------------------------
 # Tool: search_entries
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_search_entries_empty(mcp_server):
@@ -280,7 +414,9 @@ def test_search_entries_finds_by_keyword(mcp_server, sample_request):
 @pytest.mark.django_db
 def test_search_entries_filters_by_type(mcp_server, sample_request, sample_exception):
     # Search for "abc" (in family_hash) but only in exceptions
-    data = _call_tool(mcp_server, "search_entries", query="ValueError", entry_type="exception")
+    data = _call_tool(
+        mcp_server, "search_entries", query="ValueError", entry_type="exception"
+    )
     assert data["count"] == 1
     assert data["entries"][0]["type"] == "exception"
 
@@ -288,6 +424,7 @@ def test_search_entries_filters_by_type(mcp_server, sample_request, sample_excep
 # ---------------------------------------------------------------------------
 # Tool: get_request_detail
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_get_request_detail_not_found(mcp_server):
@@ -308,6 +445,7 @@ def test_get_request_detail_returns_all_events(
 # ---------------------------------------------------------------------------
 # Tool: get_stats_summary
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_get_stats_summary_empty(mcp_server):
