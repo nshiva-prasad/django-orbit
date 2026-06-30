@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from django.db import connection
 
+from orbit.adapters import unwrap_adapters
 from orbit.conf import get_config
 from orbit.watchers import cachalot_disabled
 
@@ -90,9 +91,12 @@ class OrbitQueryWrapper:
     Works with Django's connection.execute_wrapper() mechanism.
     """
 
-    def __init__(self, family_hash: Optional[str] = None, request_start: Optional[float] = None):
+    def __init__(
+        self, family_hash: Optional[str] = None, request_start: Optional[float] = None
+    ):
         self.family_hash = family_hash
-        self.request_start = request_start  # perf_counter() at request start (for waterfall)
+        # perf_counter() at request start (for waterfall)
+        self.request_start = request_start
         self.queries = []
         self.query_hashes = {}  # For duplicate detection
 
@@ -113,29 +117,22 @@ class OrbitQueryWrapper:
         config = get_config()
         slow_threshold = config.get("SLOW_QUERY_THRESHOLD_MS", 500)
 
-        # Record start time
         start_time = time.perf_counter()
 
         try:
             result = execute(sql, params, many, context)
             return result
         finally:
-            # Calculate duration
             duration_ms = (time.perf_counter() - start_time) * 1000
 
-            # Check for duplicates
             query_hash = _get_query_hash(sql)
             is_duplicate = query_hash in self.query_hashes
             self.query_hashes[query_hash] = self.query_hashes.get(query_hash, 0) + 1
             duplicate_count = self.query_hashes[query_hash]
 
-            # Check if slow
             is_slow = duration_ms > slow_threshold
-
-            # Get caller info
             caller = _extract_caller_info()
 
-            # Build query info
             query_info = {
                 "sql": sql,
                 "params": self._serialize_params(params),
@@ -147,24 +144,32 @@ class OrbitQueryWrapper:
                 "caller": caller,
             }
 
-            # Offset from request start, for the request waterfall (B4)
             if self.request_start is not None:
-                query_info["start_offset_ms"] = round((start_time - self.request_start) * 1000, 3)
+                query_info["start_offset_ms"] = round(
+                    (start_time - self.request_start) * 1000, 3
+                )
 
             self.queries.append(query_info)
-
-            # Also add to thread-local for access from middleware
             get_current_queries().append(query_info)
 
-    def _serialize_params(self, params) -> Any:
-        """Serialize query parameters for JSON storage."""
+    def _serialize_params(self, params: Any) -> Any:
+        """
+        Serialise query parameters for JSON storage.
+
+        Database backends adapt Python values into driver-level objects before
+        Orbit's wrapper fires (e.g. a JSONField dict becomes a psycopg ``Jsonb``
+        object).  ``unwrap_adapter`` detects these objects and replaces them with
+        a plain, JSON-serialisable marker dict so the value can be stored and
+        later replayed faithfully for on-demand EXPLAIN.  See ``orbit/adapters.py``
+        for the full explanation.
+        """
         from orbit.utils import serialize_for_json
 
         if params is None:
             return None
 
         try:
-            return serialize_for_json(params)
+            return serialize_for_json(unwrap_adapters(params))
         except Exception:
             return str(params)
 
@@ -203,7 +208,7 @@ def save_queries_to_orbit(
         entry = OrbitEntry(
             type=OrbitEntry.TYPE_QUERY,
             family_hash=family_hash,
-            payload=query,
+            payload=OrbitEntry.prepare_payload_for_storage(query),
             duration_ms=query.get("duration_ms"),
         )
         entries.append(entry)

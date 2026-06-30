@@ -9,6 +9,7 @@ Unlike Django Debug Toolbar, Orbit does not inject HTML into your app. It lives 
 <img width="1312" height="612" alt="Django Orbit Dashboard" src="https://github.com/user-attachments/assets/87528512-b458-4217-8dde-699a23c507ce" />
 
 [![PyPI version](https://img.shields.io/pypi/v/django-orbit?style=flat-square)](https://pypi.org/project/django-orbit/)
+[![CI](https://github.com/astro-stack/django-orbit/actions/workflows/ci.yml/badge.svg)](https://github.com/astro-stack/django-orbit/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=flat-square&logo=python)](https://python.org)
 [![Django](https://img.shields.io/badge/Django-4.0%2B-green?style=flat-square&logo=django)](https://djangoproject.com)
 [![License](https://img.shields.io/badge/License-MIT-purple?style=flat-square)](LICENSE)
@@ -62,22 +63,16 @@ Inspired by Laravel Telescope, Spatie Ray and Django Debug Toolbar.
 
 All events can be linked by `family_hash`, which lets you inspect every query, log and exception associated with one request or operation.
 
-## What's New in v0.10.0
+## What's New in v0.11.0
 
-Orbit v0.10.0 introduces the agent-native debugging base:
+Orbit v0.11.0 expands the agent-native debugging workflow from single requests into daily and release-oriented triage:
 
-- safe MCP serialization with sensitive-key masking and deterministic truncation;
-- `audit_mcp_exposure` to inspect the effective agent data policy;
-- `investigate_request` for request-family diagnosis;
-- `investigate_exception_group` for exception blast-radius analysis;
-- `create_incident_bundle` for JSON or Markdown handoff bundles;
-- `build_debug_brief` for matching ticket/error text to Orbit evidence;
-- `propose_fix_hypotheses` for ranked fix directions;
-- `propose_test_plan` for regression/performance test suggestions;
-- `MCP_ENABLED: False` now blocks all MCP tools with a stable disabled response.
+- `investigate_endpoint` summarizes endpoint health across recent traffic;
+- `daily_health_brief` produces local morning triage for exceptions, failed jobs, slow queries, N+1 candidates and warning logs;
+- `generate_release_risk_brief` flags blocker and caution signals before deploys;
+- all new workflow tools are exposed through MCP and honor `MCP_ENABLED: False`.
 
-Telemetry opt-in is not part of v0.10.0. It is intentionally being kept for a separate future release.
-
+The 0.11 line keeps these capabilities local/open-source. Cloud monetization should focus on persistence, collaboration, alerts, shared bundles, team policies and scheduled workflows.
 ## Installation
 
 ```bash
@@ -188,10 +183,20 @@ The server launches on demand over stdio. It is read-only: it queries `OrbitEntr
 | Tool | Purpose |
 |---|---|
 | `audit_mcp_exposure` | Show the effective MCP safety policy |
+| `preview_masked_entry` | Preview one entry exactly as an agent sees it, with masked payload and risk paths |
+| `find_sensitive_payload_risks` | Find recent entries whose payload keys look like secrets, tokens or credentials |
+| `list_agent_safe_fields` | Document the allowlisted fields and payload policy per entry type |
 | `investigate_request` | Diagnose one request family: timeline, signals, queries, hypotheses and next actions |
 | `investigate_exception_group` | Summarize an exception fingerprint and affected paths |
-| `create_incident_bundle` | Create JSON or Markdown handoff from request, fingerprint or ticket text |
+| `create_incident_bundle` | Create JSON, Markdown or prompt handoff from request, fingerprint or ticket text |
 | `build_debug_brief` | Match natural-language ticket text to recent evidence |
+| `investigate_endpoint` | Summarize endpoint health, errors, slow requests and related exceptions |
+| `compare_endpoint_windows` | Compare recent endpoint behavior against a baseline window to spot regressions |
+| `find_n_plus_one_candidates` | Rank recent duplicate-query/N+1 candidates with suggested next tools |
+| `summarize_exception_groups` | Group recent exceptions by fingerprint with affected paths and representatives |
+| `daily_health_brief` | Produce local daily triage from recent runtime signals |
+| `generate_release_risk_brief` | Flag blocker/caution signals before a release |
+| `generate_pr_context` | Produce PR-ready evidence, test plan and release-risk context from Orbit data |
 | `propose_fix_hypotheses` | Rank likely fix directions from captured evidence |
 | `propose_test_plan` | Suggest regression/performance tests for the observed issue |
 
@@ -200,13 +205,22 @@ The server launches on demand over stdio. It is read-only: it queries `OrbitEntr
 A typical ticket-to-fix handoff looks like this:
 
 ```text
+audit_mcp_exposure()
+find_sensitive_payload_risks(limit=20)
 build_debug_brief("checkout returns 500 payment token rejected")
 create_incident_bundle("fingerprint", "<fingerprint>", format="markdown")
+create_incident_bundle("fingerprint", "<fingerprint>", format="prompt")
 propose_fix_hypotheses("fingerprint", "<fingerprint>")
 propose_test_plan("family_hash", "<family_hash>")
+generate_pr_context("fingerprint", "<fingerprint>")
+compare_endpoint_windows("/checkout/", method="POST")
+find_n_plus_one_candidates(hours=24)
+summarize_exception_groups(hours=24)
 ```
 
 The goal is not for Orbit to edit code. The goal is to give a human or coding agent enough structured, safe evidence to reproduce, test and fix the issue.
+
+The same flow works in Codex, Claude Desktop/Claude Code, Cursor and other MCP-compatible assistants; see the docs demo for the Claude-specific config path.
 
 ## Agent Safety
 
@@ -216,7 +230,10 @@ Agent-facing output goes through Orbit's safe serializer:
 - payloads can be disabled with `MCP_INCLUDE_PAYLOADS: False`;
 - result sizes are bounded by `MCP_MAX_LIMIT`;
 - oversized payloads are replaced with truncation metadata;
-- `MCP_ENABLED: False` blocks all MCP tools with a stable disabled response.
+- `MCP_ENABLED: False` blocks all MCP tools with a stable disabled response;
+- `preview_masked_entry`, `find_sensitive_payload_risks` and `list_agent_safe_fields` let teams verify exactly what coding agents can see before sharing context.
+
+Residual risk: MCP gives a local assistant read access to Orbit telemetry. Masking and truncation reduce exposure, but telemetry can still reveal sensitive operational context such as endpoints, SQL shape, exception messages or user identifiers. In shared, staging or sensitive environments, prefer `MCP_ENABLED: False`; if agents only need metadata, set `MCP_INCLUDE_PAYLOADS: False`.
 
 Example:
 

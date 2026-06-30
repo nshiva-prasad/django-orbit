@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-26
+
+### Added
+
+- Added endpoint-level agentic investigation via `investigate_endpoint`, including request volume, error rate, slowest requests, query analysis, exception groups and suggested next tools.
+- Added `compare_endpoint_windows` to compare current endpoint behavior against a baseline window and classify regressions, stable endpoints, improvements or insufficient data.
+- Added MCP security audit tools: `preview_masked_entry`, `find_sensitive_payload_risks` and `list_agent_safe_fields`.
+- Added `find_n_plus_one_candidates` and `summarize_exception_groups` for higher-level daily debugging workflows.
+- Added `daily_health_brief` for local morning triage of exceptions, error requests, failed jobs, slow queries, N+1 candidates and warning logs.
+- Added `generate_release_risk_brief` to produce pre-release blocker/caution signals from recent Orbit runtime evidence.
+- Added `generate_pr_context` to turn Orbit evidence into PR-ready title, summary, hypotheses, test plan and release-risk notes.
+- Added `format="prompt"` for `create_incident_bundle`, producing a safe copy/paste prompt for Claude, Codex and Cursor.
+- Exposed the new 0.11 agentic workflow tools through MCP with the same `MCP_ENABLED` safety gate.
+- Added a documented demo flow: "Debug Django with Codex and Claude using Orbit context".
+- Added GitHub Actions CI for PR tests, docs builds, package builds and Twine checks, plus Dependabot updates for GitHub Actions and Python dependencies.
+- Added a success indicator after the on-demand Explain Plan panel finishes loading.
+
+### Fixed
+
+- Fixed dynamically loaded query detail panels so HTMX processes the Explain Plan button after insertion.
+- Fixed the Explain Plan success indicator so it only appears when a valid plan fragment is loaded, not when the fragment contains an error.
+- Fixed EXPLAIN replay for captured queries with JSONField adapter parameters by preserving adapter metadata during recording and rebinding it during replay.
+
+### Security
+
+- Documented the residual MCP exposure risk: Orbit masks and bounds agent-facing payloads, but MCP still gives local assistants access to runtime telemetry. Use `MCP_ENABLED: False` to disable data exposure or `MCP_INCLUDE_PAYLOADS: False` for metadata-only agent access in shared or sensitive environments.
+- Query payloads saved through bulk-create paths now honor `MASK_ALL_PAYLOADS`, including JSONField adapter marker values.
+- `EXPLAIN_ANALYZE` is now limited to plain `SELECT` statements and uses a PostgreSQL read-only transaction guard when available.
+
 ## [0.10.0] - 2026-06-25
 
 ### Added
